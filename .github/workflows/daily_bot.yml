@@ -26,7 +26,7 @@ jobs:
         
     - name: Install Python dependencies
       run: |
-        pip install -r daily_bible_bot/requirements.txt
+        pip install -r requirements.txt
         
     - name: Run Daily Bot
       env:
@@ -34,5 +34,4 @@ jobs:
         LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
         LINE_CHANNEL_SECRET: ${{ secrets.LINE_CHANNEL_SECRET }}
       run: |
-        cd daily_bible_bot
         python bot.py
