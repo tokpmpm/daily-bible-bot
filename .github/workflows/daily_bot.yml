@@ -2,8 +2,8 @@ name: Daily Bible Bot
 
 on:
   schedule:
-    # 6:00 AM Taiwan Time (UTC+8) = 22:00 UTC previous day
-    - cron: '0 22 * * *'
+    # 10:00 AM Taiwan Time (UTC+8) = 02:00 UTC
+    - cron: '0 2 * * *'
   workflow_dispatch:  # Allow manual trigger
 
 jobs:
