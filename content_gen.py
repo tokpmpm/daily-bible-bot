@@ -8,7 +8,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 def generate_exposition(verse_data):
     """
-    Generates a 500-word exposition for the given verse using OpenAI API.
+    Generates a 400-word exposition for the given verse using OpenAI API.
     """
     if not OPENAI_API_KEY:
         logging.error("OPENAI_API_KEY is not set.")
@@ -30,8 +30,7 @@ def generate_exposition(verse_data):
     4. 內容：必須包含現代生活實例，幫助讀者應用經文。
     5. 風格：溫暖、激勵人心，包含神學洞見與生活應用。
     6. 格式：
-       - 開頭第一行：今日靈修：{verse_ref}
-       - 開頭第二行：{verse_text}
+       - 開頭第一行：{verse_text}
        - 內文：分段撰寫，易於閱讀。
        - 嚴禁使用任何 Markdown 符號（如 *、#、- 等），純文字即可。
        - 禱告：請以「我們一起來禱告」作為禱告部分的開頭。
