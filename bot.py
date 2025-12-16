@@ -88,17 +88,44 @@ def run_daily_task():
             audio_duration = len(audio) # Duration in milliseconds
             logging.info(f"Audio duration: {audio_duration}ms")
 
-            # Upload to catbox.moe
-            with open(audio_path, 'rb') as f:
-                data = {'reqtype': 'fileupload'}
-                files = {'fileToUpload': f}
-                response = requests.post('https://catbox.moe/user/api.php', data=data, files=files)
+            # Upload to catbox.moe with retry logic
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    with open(audio_path, 'rb') as f:
+                        data = {'reqtype': 'fileupload'}
+                        files = {'fileToUpload': f}
+                        response = requests.post('https://catbox.moe/user/api.php', data=data, files=files, timeout=20)
+                        
+                        if response.status_code == 200:
+                            audio_url = response.text.strip()
+                            logging.info(f"Audio uploaded to catbox.moe: {audio_url}")
+                            break # Success, exit loop
+                        else:
+                            logging.warning(f"Failed to upload audio to catbox (Attempt {attempt+1}/{max_retries}): {response.status_code} {response.text}")
+                except Exception as e:
+                     logging.warning(f"Error uploading audio to catbox (Attempt {attempt+1}/{max_retries}): {e}")
                 
-                if response.status_code == 200:
-                    audio_url = response.text.strip()
-                    logging.info(f"Audio uploaded to: {audio_url}")
-                else:
-                    logging.error(f"Failed to upload audio: {response.status_code} {response.text}")
+                if attempt < max_retries - 1:
+                    time.sleep(3) # Wait before retry
+
+            # Fallback to 0x0.st if catbox failed
+            if not audio_url:
+                logging.warning("Catbox upload failed. Attempting fallback to 0x0.st...")
+                try:
+                    with open(audio_path, 'rb') as f:
+                        files = {'file': f}
+                        response = requests.post('https://0x0.st', files=files, timeout=30)
+                        if response.status_code == 200:
+                            audio_url = response.text.strip()
+                            logging.info(f"Audio uploaded to 0x0.st: {audio_url}")
+                        else:
+                            logging.error(f"Failed to upload to 0x0.st: {response.status_code} {response.text}")
+                except Exception as e:
+                    logging.error(f"Error uploading to 0x0.st: {e}")
+
+            if not audio_url:
+                logging.error("Failed to upload audio to all services. Proceeding without audio.")
         except Exception as e:
             logging.error(f"Error processing audio for LINE: {e}")
 
