@@ -4,7 +4,7 @@ import json
 import os
 import time
 import uuid
-from config import LINE_CHANNEL_ACCESS_TOKEN
+from config import LINE_CHANNEL_ACCESS_TOKEN, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_IDS
 from scraper import get_daily_verse
 from content_gen import generate_exposition
 from audio_gen import generate_audio
@@ -40,6 +40,75 @@ def broadcast_message(messages):
         if 'response' in locals():
              logging.error(f"Response: {response.text}")
         return False
+
+def push_to_telegram_chat(chat_id: str, text: str, audio_url: str = None) -> bool:
+    """
+    Push messages to a specific Telegram chat using Telegram Bot API.
+    
+    Args:
+        chat_id: Telegram chat ID (can be group, channel, or user)
+        text: Text message to send
+        audio_url: Optional audio file URL to send
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    if not TELEGRAM_BOT_TOKEN:
+        logging.error("TELEGRAM_BOT_TOKEN is not set.")
+        return False
+
+    base_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
+    
+    try:
+        # Send text message with Markdown formatting
+        text_url = f"{base_url}/sendMessage"
+        text_data = {
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": "Markdown"
+        }
+        response = requests.post(text_url, json=text_data, timeout=30)
+        response.raise_for_status()
+        logging.info(f"Successfully sent text to Telegram chat: {chat_id}")
+        
+        # Send audio if available
+        if audio_url:
+            audio_url_endpoint = f"{base_url}/sendAudio"
+            audio_data = {
+                "chat_id": chat_id,
+                "audio": audio_url,
+                "title": "每日靈修"
+            }
+            audio_response = requests.post(audio_url_endpoint, json=audio_data, timeout=60)
+            audio_response.raise_for_status()
+            logging.info(f"Successfully sent audio to Telegram chat: {chat_id}")
+        
+        return True
+    except Exception as e:
+        logging.error(f"Error pushing to Telegram chat {chat_id}: {e}")
+        if 'response' in locals():
+            logging.error(f"Response: {response.text}")
+        return False
+
+
+def push_to_all_telegram_chats(text: str, audio_url: str = None) -> dict:
+    """
+    Push messages to all configured Telegram chats.
+    
+    Returns:
+        Dictionary with chat_id as key and success status as value
+    """
+    results = {}
+    
+    if not TELEGRAM_CHAT_IDS:
+        logging.warning("No Telegram chat IDs configured. Set TELEGRAM_CHAT_IDS in .env file.")
+        return results
+    
+    for chat_id in TELEGRAM_CHAT_IDS:
+        success = push_to_telegram_chat(chat_id, text, audio_url)
+        results[chat_id] = success
+    
+    return results
 
 def run_daily_task():
     logging.info("Starting daily task...")
@@ -153,6 +222,16 @@ def run_daily_task():
         logging.info("Dry run complete. Messages not sent (Token not set).")
         print("=== Message Content ===")
         print(json.dumps(messages, indent=2, ensure_ascii=False))
+
+    # 7. Push to all configured Telegram chats
+    if TELEGRAM_CHAT_IDS:
+        # Format text for Telegram (Markdown)
+        telegram_text = f"📖 *每日靈修*\n\n{verse_data['text']}\n\n{exposition}"
+        telegram_results = push_to_all_telegram_chats(telegram_text, audio_url)
+        telegram_success_count = sum(1 for v in telegram_results.values() if v)
+        logging.info(f"Telegram push complete: {telegram_success_count}/{len(telegram_results)} chats succeeded")
+    else:
+        logging.info("No Telegram chats configured.")
 
 if __name__ == "__main__":
     run_daily_task()

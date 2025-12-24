@@ -2,8 +2,9 @@ name: Daily Bible Bot
 
 on:
   schedule:
-    # 10:00 AM Taiwan Time (UTC+8) = 02:00 UTC
-    - cron: '0 2 * * *'
+    # 09:30 AM Taiwan Time (UTC+8) = 01:30 UTC
+    # Note: Running at :30 helps avoid top-of-the-hour queue delays
+    - cron: '30 1 * * *'
   workflow_dispatch:  # Allow manual trigger
 
 jobs:
@@ -33,5 +34,7 @@ jobs:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
         LINE_CHANNEL_SECRET: ${{ secrets.LINE_CHANNEL_SECRET }}
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        TELEGRAM_CHAT_IDS: ${{ secrets.TELEGRAM_CHAT_IDS }}
       run: |
         python bot.py

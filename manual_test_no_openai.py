@@ -31,23 +31,39 @@ def run_integration_test():
     with patch('bot.generate_exposition') as mock_gen_text, \
          patch('bot.generate_audio') as mock_gen_audio:
         
-        # Set mock return values
-        mock_gen_text.return_value = (
-            "今日靈修：提摩太後書 1章7節\n"
-            "因為神賜給我們，不是膽怯的心，乃是剛強、仁愛、謹守的心。\n\n"
-            "【測試模式】這是一篇測試用的靈修短文。\n"
-            "此模式下不會呼叫 OpenAI API，因此不消耗額度。\n\n"
-            "重點測試：\n"
-            "1. 爬蟲是否正常抓取每日經文。\n"
-            "2. 音檔上傳是否成功 (catbox.moe)。\n"
-            "3. LINE 訊息 (文字 + 語音) 是否正常發送。\n\n"
-            "我們一起來禱告：\n"
-            "親愛的天父，感謝祢賜給我們剛強的心。奉耶穌的名禱告，阿們。"
-        )
+        # Set mock side_effect to use real verse data
+        def mock_generate_exposition(verse_data):
+            return (
+                f"今日靈修：{verse_data['reference']}\n"
+                f"{verse_data['text']}\n\n"
+                "【測試模式】這是一篇測試用的靈修短文。\n"
+                "此模式下不會呼叫 OpenAI API，因此不消耗額度。\n\n"
+                "重點測試：\n"
+                "1. 爬蟲是否正常抓取每日經文。\n"
+                "2. 音檔上傳是否成功 (catbox.moe)。\n"
+                "3. LINE 訊息 (文字 + 語音) 是否正常發送。\n\n"
+                "我們一起來禱告：\n"
+                "親愛的天父，感謝祢賜給我們剛強的心。奉耶穌的名禱告，阿們。"
+            )
+        mock_gen_text.side_effect = mock_generate_exposition
         mock_gen_audio.return_value = dummy_audio_path
         
-        # Run the bot
-        bot.run_daily_task()
+        # Mock broadcast_message to just print
+        with patch('bot.broadcast_message') as mock_broadcast:
+            def print_messages(messages):
+                logging.info("--- TEST MODE: Printing Messages (Not sending to LINE) ---")
+                for msg in messages:
+                    if msg['type'] == 'text':
+                        print(f"[Text Message]:\n{msg['text']}\n")
+                    elif msg['type'] == 'audio':
+                        print(f"[Audio Message]:\nURL: {msg['originalContentUrl']}\nDuration: {msg['duration']}ms\n")
+                logging.info("--- End of Messages ---")
+                return True
+            
+            mock_broadcast.side_effect = print_messages
+            
+            # Run the bot
+            bot.run_daily_task()
         
     logging.info("Integration Test Complete.")
 

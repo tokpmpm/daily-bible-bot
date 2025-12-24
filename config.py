@@ -26,9 +26,17 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
 
+# Telegram Bot API
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_IDS = [cid.strip() for cid in os.getenv("TELEGRAM_CHAT_IDS", "").split(",") if cid.strip()]
+
 if not OPENAI_API_KEY:
     print("Warning: OPENAI_API_KEY is not set.")
 if not LINE_CHANNEL_ACCESS_TOKEN:
     print("Warning: LINE_CHANNEL_ACCESS_TOKEN is not set.")
 if not LINE_CHANNEL_SECRET:
     print("Warning: LINE_CHANNEL_SECRET is not set.")
+if not TELEGRAM_BOT_TOKEN:
+    print("Warning: TELEGRAM_BOT_TOKEN is not set.")
+if not TELEGRAM_CHAT_IDS:
+    print("Warning: TELEGRAM_CHAT_IDS is not set.")
