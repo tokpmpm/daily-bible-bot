@@ -53,6 +53,10 @@ CREATE POLICY "Public read daily_bible" ON daily_bible
 CREATE POLICY "Service insert daily_bible" ON daily_bible
     FOR INSERT WITH CHECK (true);
 
+-- 允許更新瀏覽/播放次數
+CREATE POLICY "Public update daily_bible counts" ON daily_bible
+    FOR UPDATE USING (true) WITH CHECK (true);
+
 -- 允許公開新增訂閱者
 CREATE POLICY "Public insert subscribers" ON push_subscribers
     FOR INSERT WITH CHECK (true);

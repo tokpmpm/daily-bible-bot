@@ -8,7 +8,7 @@ const SUPABASE_URL = 'https://xrupcmllpwlnstcalcaj.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Io0aNJ2mqU9la7eG8xpydA_JaxCQ7mo';
 
 // TODO: 請替換為您的 VAPID Public Key
-const VAPID_PUBLIC_KEY = 'BKb_pITVpllKOg8YDtuUpbHVW401UJ6p_NJT56Rx9X7se0lly8aRc2691RwYldtzyLSdo1LYtcjzj2Jb-2T9ZKQ';
+const VAPID_PUBLIC_KEY = 'BPkD_3iECRU09Wlobb3lJhAd7XmBqH-QIxOComSVJ3Y-oinlQlA5PRETXqENksEY-lfUedCpvq1MemBEdFchdGs';
 
 // ===== State =====
 let isSubscribed = false;
