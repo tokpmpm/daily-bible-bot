@@ -2,50 +2,37 @@
    每日靈修 - Service Worker
    ============================================ */
 
-const CACHE_NAME = 'daily-bible-v1';
-const urlsToCache = [
-    '/',
-    '/index.html',
-    '/style.css',
-    '/app.js',
-    '/icon-192.png'
-];
+const CACHE_NAME = 'daily-bible-v2';
 
-// Install event - cache assets
+// Install event - skip waiting immediately
 self.addEventListener('install', (event) => {
-    event.waitUntil(
-        caches.open(CACHE_NAME)
-            .then((cache) => cache.addAll(urlsToCache))
-    );
+    console.log('SW installing...');
     self.skipWaiting();
 });
 
-// Activate event - cleanup old caches
+// Activate event - take control immediately
 self.addEventListener('activate', (event) => {
+    console.log('SW activating...');
     event.waitUntil(
-        caches.keys().then((cacheNames) => {
-            return Promise.all(
-                cacheNames.map((cacheName) => {
-                    if (cacheName !== CACHE_NAME) {
-                        return caches.delete(cacheName);
-                    }
-                })
-            );
-        })
+        Promise.all([
+            // Clean up old caches
+            caches.keys().then((cacheNames) => {
+                return Promise.all(
+                    cacheNames.filter(name => name !== CACHE_NAME)
+                        .map(name => caches.delete(name))
+                );
+            }),
+            // Take control of all clients
+            self.clients.claim()
+        ])
     );
-    self.clients.claim();
 });
 
-// Fetch event - serve from cache, fallback to network
+// Fetch event - network first, cache fallback
 self.addEventListener('fetch', (event) => {
     event.respondWith(
-        caches.match(event.request)
-            .then((response) => {
-                if (response) {
-                    return response;
-                }
-                return fetch(event.request);
-            })
+        fetch(event.request)
+            .catch(() => caches.match(event.request))
     );
 });
 
@@ -68,7 +55,6 @@ self.addEventListener('push', (event) => {
     const options = {
         body: data.body,
         icon: '/icon-192.png',
-        badge: '/icon-72.png',
         vibrate: [100, 50, 100],
         data: {
             url: data.url || '/'
@@ -95,13 +81,11 @@ self.addEventListener('notificationclick', (event) => {
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true })
             .then((clientList) => {
-                // Check if there's already a window open
                 for (const client of clientList) {
                     if (client.url.includes(self.location.origin) && 'focus' in client) {
                         return client.focus();
                     }
                 }
-                // Open a new window
                 if (clients.openWindow) {
                     return clients.openWindow(urlToOpen);
                 }
