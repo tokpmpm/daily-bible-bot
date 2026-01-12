@@ -125,8 +125,11 @@ async function subscribe() {
             return;
         }
 
+        // Wait for Service Worker to be ready (active)
+        const registration = await navigator.serviceWorker.ready;
+
         // Subscribe to push
-        const subscription = await swRegistration.pushManager.subscribe({
+        const subscription = await registration.pushManager.subscribe({
             userVisibleOnly: true,
             applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
         });
@@ -147,7 +150,7 @@ async function subscribe() {
         if (response.ok) {
             isSubscribed = true;
             updateSubscribeButton('subscribed');
-            showNotification('訂閱成功！', '您將於每天早上 9:30 收到靈修推播');
+            alert('訂閱成功！您將於每天早上收到靈修推播');
         } else {
             throw new Error('Failed to save subscription');
         }
