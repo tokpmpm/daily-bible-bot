@@ -203,20 +203,33 @@ def send_web_push_notifications(title: str, body: str, url: str = None):
         
         logging.info(f"Sending push notifications to {len(subscribers)} subscribers")
         
+        from urllib.parse import urlparse
+        
         payload = json.dumps({
             "title": title,
             "body": body[:100] + "..." if len(body) > 100 else body,
-            "url": url or "https://your-site.github.io/daily-bible/"
+            "url": url or "https://tokpmpm.github.io/daily-bible-bot/"
         })
         
         success_count = 0
         for sub in subscribers:
+            subscription = sub['subscription']
+            endpoint = subscription.get('endpoint', '')
+            if not endpoint or not endpoint.startswith('https://'):
+                continue
+            
+            parsed = urlparse(endpoint)
+            aud = f'{parsed.scheme}://{parsed.netloc}'
+            
             try:
                 webpush(
-                    subscription_info=sub['subscription'],
+                    subscription_info=subscription,
                     data=payload,
                     vapid_private_key=VAPID_PRIVATE_KEY,
-                    vapid_claims={"sub": "mailto:admin@example.com"}
+                    vapid_claims={
+                        "sub": "mailto:daily-bible@example.com",
+                        "aud": aud
+                    }
                 )
                 success_count += 1
             except WebPushException as e:
@@ -364,7 +377,7 @@ def run_daily_task():
         send_web_push_notifications(
             title="📖 今日靈修",
             body=f"{verse_data['reference']}: {verse_data['text'][:50]}...",
-            url="https://your-site.github.io/daily-bible/"
+            url="https://tokpmpm.github.io/daily-bible-bot/"
         )
     
     logging.info("Daily task completed successfully!")
