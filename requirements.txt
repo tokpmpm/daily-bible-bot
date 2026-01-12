@@ -3,3 +3,4 @@ beautifulsoup4
 edge-tts
 pydub
 line-bot-sdk
+pywebpush

@@ -30,6 +30,15 @@ LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_IDS = [cid.strip() for cid in os.getenv("TELEGRAM_CHAT_IDS", "").split(",") if cid.strip()]
 
+# Supabase Configuration
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "")
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
+
+# Web Push VAPID Keys
+VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
+VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
+
 if not OPENAI_API_KEY:
     print("Warning: OPENAI_API_KEY is not set.")
 if not LINE_CHANNEL_ACCESS_TOKEN:
@@ -40,3 +49,6 @@ if not TELEGRAM_BOT_TOKEN:
     print("Warning: TELEGRAM_BOT_TOKEN is not set.")
 if not TELEGRAM_CHAT_IDS:
     print("Warning: TELEGRAM_CHAT_IDS is not set.")
+if not SUPABASE_URL:
+    print("Info: SUPABASE_URL is not set. Web features disabled.")
+

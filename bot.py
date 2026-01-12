@@ -4,13 +4,23 @@ import json
 import os
 import time
 import uuid
-from config import LINE_CHANNEL_ACCESS_TOKEN, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_IDS
+from datetime import datetime
+from config import (
+    LINE_CHANNEL_ACCESS_TOKEN, 
+    TELEGRAM_BOT_TOKEN, 
+    TELEGRAM_CHAT_IDS,
+    SUPABASE_URL,
+    SUPABASE_SERVICE_KEY,
+    VAPID_PRIVATE_KEY,
+    VAPID_PUBLIC_KEY
+)
 from scraper import get_daily_verse
 from content_gen import generate_exposition
 from audio_gen import generate_audio
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
 
 def broadcast_message(messages):
     """
@@ -109,6 +119,117 @@ def push_to_all_telegram_chats(text: str, audio_url: str = None) -> dict:
         results[chat_id] = success
     
     return results
+
+
+def save_to_supabase(verse_data: dict, exposition: str, audio_url: str) -> str:
+    """
+    儲存每日內容至 Supabase
+    Returns: 新建立的記錄 ID，失敗則返回 None
+    """
+    if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+        logging.warning("Supabase credentials not set. Skipping save.")
+        return None
+    
+    data = {
+        "date": datetime.now().strftime("%Y-%m-%d"),
+        "verse_text": verse_data['text'],
+        "verse_reference": verse_data['reference'],
+        "exposition": exposition,
+        "audio_url": audio_url or "",
+        "view_count": 0,
+        "play_count": 0
+    }
+    
+    try:
+        response = requests.post(
+            f"{SUPABASE_URL}/rest/v1/daily_bible",
+            headers={
+                "apikey": SUPABASE_SERVICE_KEY,
+                "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+                "Content-Type": "application/json",
+                "Prefer": "return=representation"
+            },
+            json=data,
+            timeout=30
+        )
+        
+        if response.status_code in [200, 201]:
+            result = response.json()
+            record_id = result[0]['id'] if result else None
+            logging.info(f"Successfully saved to Supabase: {record_id}")
+            return record_id
+        else:
+            logging.error(f"Failed to save to Supabase: {response.text}")
+            return None
+    except Exception as e:
+        logging.error(f"Error saving to Supabase: {e}")
+        return None
+
+
+def send_web_push_notifications(title: str, body: str, url: str = None):
+    """
+    發送 Web Push 通知給所有訂閱者
+    """
+    if not all([SUPABASE_URL, SUPABASE_SERVICE_KEY, VAPID_PRIVATE_KEY]):
+        logging.warning("Web Push credentials not set. Skipping push notifications.")
+        return
+    
+    try:
+        from pywebpush import webpush, WebPushException
+    except ImportError:
+        logging.warning("pywebpush not installed. Skipping push notifications.")
+        return
+    
+    # 從 Supabase 取得所有訂閱者
+    try:
+        response = requests.get(
+            f"{SUPABASE_URL}/rest/v1/push_subscribers?select=subscription",
+            headers={
+                "apikey": SUPABASE_SERVICE_KEY,
+                "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}"
+            },
+            timeout=30
+        )
+        
+        if response.status_code != 200:
+            logging.error(f"Failed to get subscribers: {response.text}")
+            return
+        
+        subscribers = response.json()
+        
+        if not subscribers:
+            logging.info("No push subscribers found.")
+            return
+        
+        logging.info(f"Sending push notifications to {len(subscribers)} subscribers")
+        
+        payload = json.dumps({
+            "title": title,
+            "body": body[:100] + "..." if len(body) > 100 else body,
+            "url": url or "https://your-site.github.io/daily-bible/"
+        })
+        
+        success_count = 0
+        for sub in subscribers:
+            try:
+                webpush(
+                    subscription_info=sub['subscription'],
+                    data=payload,
+                    vapid_private_key=VAPID_PRIVATE_KEY,
+                    vapid_claims={"sub": "mailto:admin@example.com"}
+                )
+                success_count += 1
+            except WebPushException as e:
+                logging.warning(f"Failed to send push: {e}")
+                # 如果訂閱已失效，可以從資料庫刪除
+                if e.response and e.response.status_code in [404, 410]:
+                    logging.info("Subscription expired, should be removed")
+        
+        logging.info(f"Web Push complete: {success_count}/{len(subscribers)} succeeded")
+        
+    except Exception as e:
+        logging.error(f"Error sending web push: {e}")
+
 
 def run_daily_task():
     logging.info("Starting daily task...")
@@ -232,6 +353,22 @@ def run_daily_task():
         logging.info(f"Telegram push complete: {telegram_success_count}/{len(telegram_results)} chats succeeded")
     else:
         logging.info("No Telegram chats configured.")
+
+    # 8. 儲存至 Supabase
+    record_id = save_to_supabase(verse_data, exposition, audio_url)
+    if record_id:
+        logging.info(f"Content saved to Supabase with ID: {record_id}")
+    
+    # 9. 發送 Web Push 通知
+    if record_id:
+        send_web_push_notifications(
+            title="📖 今日靈修",
+            body=f"{verse_data['reference']}: {verse_data['text'][:50]}...",
+            url="https://your-site.github.io/daily-bible/"
+        )
+    
+    logging.info("Daily task completed successfully!")
+
 
 if __name__ == "__main__":
     run_daily_task()

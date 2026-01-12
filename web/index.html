@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="每日靈修 - 訂閱獲得每日聖經解經文字及語音">
+    <meta name="theme-color" content="#1a1a2e">
+    <title>每日靈修 | Daily Bible</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" href="icon-192.png">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <!-- iOS Install Prompt -->
+    <div id="ios-prompt" class="ios-prompt hidden">
+        <div class="ios-prompt-content">
+            <button class="ios-prompt-close" onclick="closeIOSPrompt()">&times;</button>
+            <div class="ios-prompt-icon">📱</div>
+            <h3>開啟通知功能</h3>
+            <p>為了接收每日靈修推播通知，請將網頁加入主畫面：</p>
+            <ol>
+                <li>點擊下方 <span class="share-icon">↑</span> 分享按鈕</li>
+                <li>往下滑動，選擇「<strong>加入主畫面</strong>」</li>
+                <li>點擊「新增」</li>
+                <li>從主畫面開啟本網頁後即可訂閱</li>
+            </ol>
+            <button class="btn btn-secondary" onclick="closeIOSPrompt()">我知道了</button>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <span class="logo-icon">📖</span>
+                    <h1>每日靈修</h1>
+                </div>
+                <div class="subscribe-area">
+                    <button id="subscribe-btn" class="btn btn-primary" onclick="handleSubscribe()">
+                        <span class="btn-icon">🔔</span>
+                        <span class="btn-text">訂閱通知</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <h2>每日與神親近</h2>
+                <p>訂閱後，每天早上 11:00 後收到精選經文與解經靈修</p>
+                <div class="hero-stats">
+                    <div class="stat">
+                        <span class="stat-number" id="total-subscribers">--</span>
+                        <span class="stat-label">訂閱者</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-number" id="total-views">--</span>
+                        <span class="stat-label">總瀏覽</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-number" id="total-plays">--</span>
+                        <span class="stat-label">總播放</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Content Section -->
+    <main class="content">
+        <div class="container">
+            <h2 class="section-title">過去 14 天靈修</h2>
+            <div id="content-list" class="content-list">
+                <!-- Content will be loaded dynamically -->
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                    <p>載入中...</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>每日靈修 &copy; 2026 | 願神的話語成為你腳前的燈、路上的光</p>
+            <div class="footer-links">
+                <a href="#" onclick="showAlternativeSubscribe()">其他訂閱方式</a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Alternative Subscribe Modal -->
+    <div id="alt-subscribe-modal" class="modal hidden">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+            <h3>其他訂閱方式</h3>
+            <p>如果 Web Push 在您的裝置上無法使用，可使用以下方式：</p>
+            <div class="alt-options">
+                <a href="https://line.me/R/ti/p/@YOUR_LINE_BOT_ID" target="_blank" class="alt-option">
+                    <span class="alt-icon">💬</span>
+                    <span>LINE 官方帳號</span>
+                </a>
+                <a href="https://t.me/YOUR_TELEGRAM_BOT" target="_blank" class="alt-option">
+                    <span class="alt-icon">✈️</span>
+                    <span>Telegram 頻道</span>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
