@@ -293,17 +293,27 @@ def run_daily_task():
 
             # Upload to catbox.moe with retry logic
             max_retries = 3
+            # Use a browser-like User-Agent to avoid being blocked or receiving empty responses
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            }
+            
             for attempt in range(max_retries):
                 try:
                     with open(audio_path, 'rb') as f:
                         data = {'reqtype': 'fileupload'}
                         files = {'fileToUpload': f}
-                        response = requests.post('https://catbox.moe/user/api.php', data=data, files=files, timeout=20)
+                        response = requests.post('https://catbox.moe/user/api.php', data=data, files=files, headers=headers, timeout=20)
                         
                         if response.status_code == 200:
-                            audio_url = response.text.strip()
-                            logging.info(f"Audio uploaded to catbox.moe: {audio_url}")
-                            break # Success, exit loop
+                            uploaded_url = response.text.strip()
+                            # Validation: Check if we got a valid URL back (not empty, starts with http)
+                            if uploaded_url and uploaded_url.startswith('http'):
+                                audio_url = uploaded_url
+                                logging.info(f"Audio uploaded to catbox.moe: {audio_url}")
+                                break # Success, exit loop
+                            else:
+                                logging.warning(f"Catbox returned 200 but invalid content: '{uploaded_url}'")
                         else:
                             logging.warning(f"Failed to upload audio to catbox (Attempt {attempt+1}/{max_retries}): {response.status_code} {response.text}")
                 except Exception as e:
@@ -318,10 +328,15 @@ def run_daily_task():
                 try:
                     with open(audio_path, 'rb') as f:
                         files = {'file': f}
-                        response = requests.post('https://0x0.st', files=files, timeout=30)
+                        # 0x0.st requires a User-Agent, using a custom one or browser-like
+                        response = requests.post('https://0x0.st', files=files, headers=headers, timeout=30)
                         if response.status_code == 200:
-                            audio_url = response.text.strip()
-                            logging.info(f"Audio uploaded to 0x0.st: {audio_url}")
+                            uploaded_url = response.text.strip()
+                            if uploaded_url and uploaded_url.startswith('http'):
+                                audio_url = uploaded_url
+                                logging.info(f"Audio uploaded to 0x0.st: {audio_url}")
+                            else:
+                                logging.error(f"0x0.st returned 200 but invalid content: '{uploaded_url}'")
                         else:
                             logging.error(f"Failed to upload to 0x0.st: {response.status_code} {response.text}")
                 except Exception as e:
