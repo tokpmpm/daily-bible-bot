@@ -256,7 +256,7 @@ function createContentCard(item) {
             </div>
             <div class="card-reference">${item.verse_reference}</div>
             <div class="card-verse">${item.verse_text.replace(/\n/g, '<br>')}</div>
-            <div class="card-exposition" id="exposition-${item.id}">${item.exposition}</div>
+            <div class="card-exposition" id="exposition-${item.id}">${item.exposition.replace(/\n/g, '<br>')}</div>
             <div class="card-actions">
                 <button class="expand-btn" onclick="toggleExpand('${item.id}')">展開全文</button>
             </div>
