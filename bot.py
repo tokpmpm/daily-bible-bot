@@ -322,25 +322,34 @@ def run_daily_task():
                 if attempt < max_retries - 1:
                     time.sleep(3) # Wait before retry
 
-            # Fallback to 0x0.st if catbox failed
+            # Fallback to Supabase Storage if catbox failed
             if not audio_url:
-                logging.warning("Catbox upload failed. Attempting fallback to 0x0.st...")
+                logging.warning("Catbox upload failed. Attempting fallback to Supabase Storage...")
                 try:
-                    with open(audio_path, 'rb') as f:
-                        files = {'file': f}
-                        # 0x0.st requires a User-Agent, using a custom one or browser-like
-                        response = requests.post('https://0x0.st', files=files, headers=headers, timeout=30)
-                        if response.status_code == 200:
-                            uploaded_url = response.text.strip()
-                            if uploaded_url and uploaded_url.startswith('http'):
-                                audio_url = uploaded_url
-                                logging.info(f"Audio uploaded to 0x0.st: {audio_url}")
-                            else:
-                                logging.error(f"0x0.st returned 200 but invalid content: '{uploaded_url}'")
+                    if SUPABASE_URL and SUPABASE_SERVICE_KEY:
+                        filename = f"daily_message_{datetime.now().strftime('%Y%m%d')}.mp3"
+                        upload_url = f"{SUPABASE_URL}/storage/v1/object/audio/{filename}"
+                        with open(audio_path, 'rb') as f:
+                            resp = requests.post(
+                                upload_url,
+                                headers={
+                                    "apikey": SUPABASE_SERVICE_KEY,
+                                    "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+                                    "Content-Type": "audio/mpeg",
+                                    "x-upsert": "true"
+                                },
+                                data=f,
+                                timeout=60
+                            )
+                        if resp.status_code in [200, 201]:
+                            audio_url = f"{SUPABASE_URL}/storage/v1/object/public/audio/{filename}"
+                            logging.info(f"Audio uploaded to Supabase Storage: {audio_url}")
                         else:
-                            logging.error(f"Failed to upload to 0x0.st: {response.status_code} {response.text}")
+                            logging.error(f"Failed to upload to Supabase Storage: {resp.status_code} {resp.text}")
+                    else:
+                        logging.error("Supabase credentials not set. Cannot use fallback.")
                 except Exception as e:
-                    logging.error(f"Error uploading to 0x0.st: {e}")
+                    logging.error(f"Error uploading to Supabase Storage: {e}")
 
             if not audio_url:
                 logging.error("Failed to upload audio to all services. Proceeding without audio.")
