@@ -44,11 +44,10 @@ jobs:
         VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
       run: |
         python bot.py
-        echo "BOT_STATUS=success" >> $GITHUB_ENV
 
     # ─── Email: 成功通知 ───────────────────────────────────────────
     - name: Send Success Email
-      if: success() && env.BOT_STATUS == 'success'
+      if: success()
       uses: dawidd6/action-send-mail@v3
       with:
         server_address: smtp.gmail.com

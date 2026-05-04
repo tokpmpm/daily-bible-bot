@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2026-05-04] - Email 通知條件語法修復
+### Fixed
+- **現狀**: Email 成功通知步驟的 `if` 條件含有錯誤語法 `env.BOT_STATUS == 'success'`，可能導致條件判斷失效。
+- **根本原因 (Root Cause)**: `env.BOT_STATUS` 在 GitHub Actions expression 中必須使用 `${{ env.BOT_STATUS }}` 語法引用，且該變數只在前一 step 的 `run` 腳本中設定，存在競爭條件。
+- **修正方案**:
+  1. 移除 `if: success() && env.BOT_STATUS == 'success'` 中多餘的 `env.BOT_STATUS` 條件，直接使用 `if: success()`（GitHub Actions 的 `success()` 函數本身即正確追蹤所有前置 step 的狀態）。
+  2. 清除 `Run Daily Bot` step 中多餘的 `echo "BOT_STATUS=success" >> $GITHUB_ENV`。
+- **驗證結果**: YAML 語法驗證通過，通知邏輯符合 GitHub Actions 官方建議。
+
 ## [2026-05-04] - Email 執行通知
 ### Added
 - **新增功能**: 在 `daily_bot.yml` 加入成功/失敗 Email 通知（透過 `dawidd6/action-send-mail@v3`）。
