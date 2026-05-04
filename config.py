@@ -39,6 +39,9 @@ SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
 VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
 
+# Testing
+DRY_RUN = os.getenv("DRY_RUN", "false").lower() == "true"
+
 if not OPENAI_API_KEY:
     print("Warning: OPENAI_API_KEY is not set.")
 if not LINE_CHANNEL_ACCESS_TOKEN:

@@ -12,7 +12,8 @@ from config import (
     SUPABASE_URL,
     SUPABASE_SERVICE_KEY,
     VAPID_PRIVATE_KEY,
-    VAPID_PUBLIC_KEY
+    VAPID_PUBLIC_KEY,
+    DRY_RUN
 )
 from scraper import get_daily_verse
 from content_gen import generate_exposition
@@ -374,15 +375,21 @@ def run_daily_task():
 
     # 6. Send via LINE
     # Only send if we are in production or have tokens.
-    if LINE_CHANNEL_ACCESS_TOKEN != "your_line_channel_access_token":
+    if DRY_RUN:
+        logging.info("DRY_RUN enabled. Skipping LINE broadcast.")
+        print("=== Message Content ===")
+        print(json.dumps(messages, indent=2, ensure_ascii=False))
+    elif LINE_CHANNEL_ACCESS_TOKEN and LINE_CHANNEL_ACCESS_TOKEN != "your_line_channel_access_token":
         broadcast_message(messages)
     else:
-        logging.info("Dry run complete. Messages not sent (Token not set).")
+        logging.info("LINE_CHANNEL_ACCESS_TOKEN not set or invalid. Messages not sent.")
         print("=== Message Content ===")
         print(json.dumps(messages, indent=2, ensure_ascii=False))
 
     # 7. Push to all configured Telegram chats
-    if TELEGRAM_CHAT_IDS:
+    if DRY_RUN:
+        logging.info("DRY_RUN enabled. Skipping Telegram push.")
+    elif TELEGRAM_CHAT_IDS:
         # Format text for Telegram (Markdown)
         telegram_text = f"📖 *每日靈修*\n\n{verse_data['text']}\n\n{exposition}"
         telegram_results = push_to_all_telegram_chats(telegram_text, audio_url)
@@ -392,12 +399,18 @@ def run_daily_task():
         logging.info("No Telegram chats configured.")
 
     # 8. 儲存至 Supabase
-    record_id = save_to_supabase(verse_data, exposition, audio_url)
-    if record_id:
-        logging.info(f"Content saved to Supabase with ID: {record_id}")
+    record_id = None
+    if DRY_RUN:
+        logging.info("DRY_RUN enabled. Skipping Supabase save.")
+    else:
+        record_id = save_to_supabase(verse_data, exposition, audio_url)
+        if record_id:
+            logging.info(f"Content saved to Supabase with ID: {record_id}")
     
     # 9. 發送 Web Push 通知
-    if record_id:
+    if DRY_RUN:
+        logging.info("DRY_RUN enabled. Skipping Web Push notifications.")
+    elif record_id:
         send_web_push_notifications(
             title="📖 今日靈修",
             body=f"{verse_data['reference']}: {verse_data['text'][:50]}...",
