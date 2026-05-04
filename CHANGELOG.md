@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2026-05-04] - 手動測試安全機制 (Dry Run)
+### Added
+- **新增功能**: 在 Python 腳本層級加入完整的 `DRY_RUN` 支援，避免測試時干擾實際用戶。
+  - 當設定 `DRY_RUN=true` 時，將會跳過傳送 LINE 訊息、Telegram 推播、Supabase 儲存與 Web Push 廣播。
+  - 終端機與 CI logs 會印出 `=== Message Content ===` 的 JSON 格式內容以供除錯。
+- **新增規則**: 新增 `.agent/rules/manual-testing.md` 文件。未來 AI 助理在進行手動測試或執行時，會強制先詢問使用者是否要啟動 Dry Run，預設避免意外發送推播。
+### Fixed
+- **現狀**: 前次執行手動測試時，雖然傳遞了 `dry_run: true` 參數給 GitHub Actions，但由於原本 Python 程式缺乏對此環境變數的判斷，導致仍發出了 LINE 訊息。
+- **根本原因 (Root Cause)**: 原有防呆機制僅檢查 `LINE_CHANNEL_ACCESS_TOKEN` 是否等於 `"your_line_channel_access_token"` 或為空值。但 GitHub Actions expression 傳入空字串的行為無法完全攔截執行。
+- **修正方案**: 讓 `bot.py` 明確讀取 `DRY_RUN` 環境變數，當其為 `true` 時，在各個推播與寫入服務前進行短路 (Short-circuit) 攔截。
+- **驗證結果**: 透過修改程式碼並 push 至遠端，確定此邏輯可成功攔截不必要的外部服務請求。
+
 ## [2026-05-04] - Email 通知條件語法修復
 ### Fixed
 - **現狀**: Email 成功通知步驟的 `if` 條件含有錯誤語法 `env.BOT_STATUS == 'success'`，可能導致條件判斷失效。
