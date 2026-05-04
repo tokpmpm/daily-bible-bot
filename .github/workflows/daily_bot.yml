@@ -10,26 +10,27 @@ on:
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
-      
+      uses: actions/checkout@v4
+
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
-        python-version: '3.9'
-        
+        python-version: '3.11'
+
     - name: Install system dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y ffmpeg
-        
+
     - name: Install Python dependencies
       run: |
         pip install -r requirements.txt
-        
+
     - name: Run Daily Bot
+      id: run_bot
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
@@ -43,4 +44,50 @@ jobs:
         VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
       run: |
         python bot.py
+        echo "BOT_STATUS=success" >> $GITHUB_ENV
 
+    # ─── Email: 成功通知 ───────────────────────────────────────────
+    - name: Send Success Email
+      if: success() && env.BOT_STATUS == 'success'
+      uses: dawidd6/action-send-mail@v3
+      with:
+        server_address: smtp.gmail.com
+        server_port: 465
+        secure: true
+        username: ${{ secrets.EMAIL_SENDER }}
+        password: ${{ secrets.EMAIL_PASSWORD }}
+        subject: "✅ [Daily Bible Bot] 每日解經推播成功 - ${{ github.run_number }}"
+        to: tokpmpm@gmail.com
+        from: Daily Bible Bot <${{ secrets.EMAIL_SENDER }}>
+        body: |
+          ✅ Daily Bible Bot 執行成功！
+
+          📅 執行時間：${{ github.event.repository.updated_at }}
+          🔢 Run Number：${{ github.run_number }}
+          🌿 Branch：${{ github.ref_name }}
+          🔗 詳細記錄：https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          每日解經內容已成功推播至所有頻道，平安！🙏
+
+    # ─── Email: 失敗通知 ───────────────────────────────────────────
+    - name: Send Failure Email
+      if: failure()
+      uses: dawidd6/action-send-mail@v3
+      with:
+        server_address: smtp.gmail.com
+        server_port: 465
+        secure: true
+        username: ${{ secrets.EMAIL_SENDER }}
+        password: ${{ secrets.EMAIL_PASSWORD }}
+        subject: "❌ [Daily Bible Bot] 執行失敗，請檢查！- Run #${{ github.run_number }}"
+        to: tokpmpm@gmail.com
+        from: Daily Bible Bot <${{ secrets.EMAIL_SENDER }}>
+        body: |
+          ❌ Daily Bible Bot 執行失敗！
+
+          📅 執行時間：${{ github.event.repository.updated_at }}
+          🔢 Run Number：${{ github.run_number }}
+          🌿 Branch：${{ github.ref_name }}
+          🔗 查看錯誤詳情：https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          請立即點擊上方連結查看錯誤日誌並修復問題。

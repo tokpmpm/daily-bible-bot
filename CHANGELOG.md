@@ -2,7 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
-## [2026-05-04]
+## [2026-05-04] - Email 執行通知
+### Added
+- **新增功能**: 在 `daily_bot.yml` 加入成功/失敗 Email 通知（透過 `dawidd6/action-send-mail@v3`）。
+  - 成功時：寄出包含執行摘要與 Actions 連結的通知信。
+  - 失敗時：立即寄出警示信，提醒點擊查看錯誤日誌。
+- **新增 Skill**: 建立 `github-actions-email-notify` 可重用 Skill，未來任何專案加入 Email 通知只需套用此範本。
+- **順帶升級**: `actions/checkout@v3` → `v4`，`setup-python@v4` → `v5`，Python 版本 `3.9` → `3.11`。
+- **所需 Secrets**: 需在 Repository 中手動新增 `EMAIL_SENDER` 與 `EMAIL_PASSWORD`。
+
+## [2026-05-04] - Scraper 重構
 ### Fixed
 - **現狀**: 雖然修復了 GitHub Actions 排程，但每天解經機器人依然沒有推播訊息。
 - **根本原因 (Root Cause)**: `YouVersion (bible.com)` 網站更改了前端架構（改為動態渲染 Single Page Application），原先 `scraper.py` 使用 `BeautifulSoup` 解析靜態 HTML 的方式失效，導致無法正確抓取「每日經文」。
