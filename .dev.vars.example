@@ -1,0 +1,2 @@
+GITHUB_TOKEN=github_pat_or_fine_grained_token_with_actions_write
+CRON_TRIGGER_SECRET=optional_manual_trigger_secret

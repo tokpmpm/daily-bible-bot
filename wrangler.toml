@@ -1,0 +1,12 @@
+name = "daily-bible-bot-trigger"
+main = "src/cloudflare-trigger.js"
+compatibility_date = "2026-05-21"
+
+[triggers]
+crons = ["30 1 * * *"] # 09:30 Asia/Taipei
+
+[vars]
+GITHUB_OWNER = "tokpmpm"
+GITHUB_REPO = "daily-bible-bot"
+GITHUB_WORKFLOW_ID = "daily_bot.yml"
+GITHUB_REF = "main"

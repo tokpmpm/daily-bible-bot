@@ -1,0 +1,9 @@
+{
+  "scripts": {
+    "deploy:trigger": "wrangler deploy",
+    "dev:trigger": "wrangler dev"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
