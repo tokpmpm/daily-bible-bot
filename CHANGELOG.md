@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2026-05-27] - Podcast RSS 與 Cloudflare R2 音檔儲存
+### Added
+- 新增 Cloudflare R2 作為正式音檔儲存來源，LINE、Telegram、網站播放器與 Podcast RSS 共用同一個公開 MP3 URL。
+- 新增 Cloudflare Worker 安全上傳入口，GitHub Actions 不需保存 R2 S3 secret。
+- Cloudflare Worker 新增 `/podcast.xml`，從 Supabase 讀取每日內容並輸出標準 Podcast RSS feed。
+- Supabase `daily_bible` 新增 podcast metadata 欄位：`audio_duration_ms`、`audio_size_bytes`、`podcast_guid`、`published_at`。
+
+### Changed
+- 移除主流程對 Catbox 與 Supabase Storage 的音檔上傳依賴。
+- GitHub Actions 新增 Worker audio upload 所需 secrets。
+
 ## [2026-05-04] - 手動測試安全機制 (Dry Run)
 ### Added
 - **新增功能**: 在 Python 腳本層級加入完整的 `DRY_RUN` 支援，避免測試時干擾實際用戶。

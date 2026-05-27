@@ -39,6 +39,11 @@ SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
 VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
 
+# Cloudflare Worker audio upload
+AUDIO_UPLOAD_URL = os.getenv("AUDIO_UPLOAD_URL", "")
+AUDIO_UPLOAD_SECRET = os.getenv("AUDIO_UPLOAD_SECRET", "")
+R2_PUBLIC_BASE_URL = os.getenv("R2_PUBLIC_BASE_URL", "")
+
 # Testing
 DRY_RUN = os.getenv("DRY_RUN", "false").lower() == "true"
 
@@ -54,4 +59,3 @@ if not TELEGRAM_CHAT_IDS:
     print("Warning: TELEGRAM_CHAT_IDS is not set.")
 if not SUPABASE_URL:
     print("Info: SUPABASE_URL is not set. Web features disabled.")
-

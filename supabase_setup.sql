@@ -11,10 +11,20 @@ CREATE TABLE IF NOT EXISTS daily_bible (
     verse_reference TEXT NOT NULL,
     exposition TEXT NOT NULL,
     audio_url TEXT DEFAULT '',
+    audio_duration_ms INTEGER DEFAULT 0,
+    audio_size_bytes BIGINT DEFAULT 0,
+    podcast_guid TEXT DEFAULT '',
+    published_at TIMESTAMPTZ DEFAULT NOW(),
     view_count INTEGER DEFAULT 0,
     play_count INTEGER DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Existing installs can safely run these ALTER statements.
+ALTER TABLE daily_bible ADD COLUMN IF NOT EXISTS audio_duration_ms INTEGER DEFAULT 0;
+ALTER TABLE daily_bible ADD COLUMN IF NOT EXISTS audio_size_bytes BIGINT DEFAULT 0;
+ALTER TABLE daily_bible ADD COLUMN IF NOT EXISTS podcast_guid TEXT DEFAULT '';
+ALTER TABLE daily_bible ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ DEFAULT NOW();
 
 -- 2. Push 訂閱者資料表
 CREATE TABLE IF NOT EXISTS push_subscribers (

@@ -2,6 +2,10 @@ name = "daily-bible-bot-trigger"
 main = "src/cloudflare-trigger.js"
 compatibility_date = "2026-05-21"
 
+[[r2_buckets]]
+binding = "DAILY_BIBLE_AUDIO"
+bucket_name = "daily-bible-audio"
+
 [triggers]
 crons = ["30 1 * * *"] # 09:30 Asia/Taipei
 
@@ -10,3 +14,13 @@ GITHUB_OWNER = "tokpmpm"
 GITHUB_REPO = "daily-bible-bot"
 GITHUB_WORKFLOW_ID = "daily_bot.yml"
 GITHUB_REF = "main"
+SUPABASE_URL = "https://xrupcmllpwlnstcalcaj.supabase.co"
+SUPABASE_ANON_KEY = "sb_publishable_Io0aNJ2mqU9la7eG8xpydA_JaxCQ7mo"
+PODCAST_TITLE = "每日靈修"
+PODCAST_DESCRIPTION = "每日聖經經文、靈修短文與禱告。"
+PODCAST_AUTHOR = "Daily Bible Bot"
+PODCAST_OWNER_NAME = "Daily Bible Bot"
+PODCAST_OWNER_EMAIL = "tokpmpm@gmail.com"
+PODCAST_SITE_URL = "https://tokpmpm.github.io/daily-bible-bot/"
+PODCAST_IMAGE_URL = "https://tokpmpm.github.io/daily-bible-bot/icon-192.png"
+R2_PUBLIC_BASE_URL = "https://pub-ef2c4426f2a34414a1e0fce33725835b.r2.dev"

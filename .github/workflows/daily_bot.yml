@@ -43,6 +43,9 @@ jobs:
         SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
         VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+        AUDIO_UPLOAD_URL: ${{ secrets.AUDIO_UPLOAD_URL }}
+        AUDIO_UPLOAD_SECRET: ${{ secrets.AUDIO_UPLOAD_SECRET }}
+        R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
         DRY_RUN: ${{ github.event.inputs.dry_run }}
       run: |
         python bot.py
