@@ -133,7 +133,7 @@ async function podcastFeedResponse(request, env) {
     "podcast_guid",
     "published_at",
   ].join(",");
-  const endpoint = `${env.SUPABASE_URL}/rest/v1/daily_bible?select=${select}&order=published_at.desc&limit=100`;
+  const endpoint = `${env.SUPABASE_URL}/rest/v1/daily_bible?select=${select}&audio_size_bytes=gt.0&order=published_at.desc&limit=100`;
   const response = await fetch(endpoint, {
     headers: {
       apikey: env.SUPABASE_ANON_KEY,
