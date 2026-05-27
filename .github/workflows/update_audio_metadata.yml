@@ -1,0 +1,94 @@
+name: Update Audio Metadata
+
+on:
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "daily_bible date to update (YYYY-MM-DD)"
+        required: true
+        type: string
+      audio_url:
+        description: "Public MP3 URL"
+        required: true
+        type: string
+      audio_duration_ms:
+        description: "Audio duration in milliseconds"
+        required: true
+        type: string
+      audio_size_bytes:
+        description: "Audio size in bytes"
+        required: true
+        type: string
+      podcast_guid:
+        description: "Stable podcast episode GUID"
+        required: true
+        type: string
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update Supabase row
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          ROW_DATE: ${{ inputs.date }}
+          AUDIO_URL: ${{ inputs.audio_url }}
+          AUDIO_DURATION_MS: ${{ inputs.audio_duration_ms }}
+          AUDIO_SIZE_BYTES: ${{ inputs.audio_size_bytes }}
+          PODCAST_GUID: ${{ inputs.podcast_guid }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import sys
+          import urllib.parse
+          import urllib.request
+
+          required = [
+              "SUPABASE_URL",
+              "SUPABASE_SERVICE_KEY",
+              "ROW_DATE",
+              "AUDIO_URL",
+              "AUDIO_DURATION_MS",
+              "AUDIO_SIZE_BYTES",
+              "PODCAST_GUID",
+          ]
+          missing = [key for key in required if not os.environ.get(key)]
+          if missing:
+              raise SystemExit(f"Missing required environment variables: {', '.join(missing)}")
+
+          payload = {
+              "audio_url": os.environ["AUDIO_URL"],
+              "audio_duration_ms": int(os.environ["AUDIO_DURATION_MS"]),
+              "audio_size_bytes": int(os.environ["AUDIO_SIZE_BYTES"]),
+              "podcast_guid": os.environ["PODCAST_GUID"],
+          }
+          row_date = urllib.parse.quote(os.environ["ROW_DATE"], safe="")
+          url = f"{os.environ['SUPABASE_URL'].rstrip('/')}/rest/v1/daily_bible?date=eq.{row_date}"
+          data = json.dumps(payload).encode("utf-8")
+          request = urllib.request.Request(
+              url,
+              method="PATCH",
+              data=data,
+              headers={
+                  "apikey": os.environ["SUPABASE_SERVICE_KEY"],
+                  "Authorization": f"Bearer {os.environ['SUPABASE_SERVICE_KEY']}",
+                  "Content-Type": "application/json",
+                  "Prefer": "return=representation",
+              },
+          )
+
+          try:
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  body = response.read().decode("utf-8")
+          except Exception as exc:
+              raise SystemExit(f"Supabase update failed: {exc}") from exc
+
+          rows = json.loads(body)
+          if len(rows) != 1:
+              print(body)
+              raise SystemExit(f"Expected to update 1 row, updated {len(rows)}")
+
+          print(f"Updated daily_bible row for {os.environ['ROW_DATE']}")
+          PY
