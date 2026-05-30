@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2026-05-30] - Podcast RSS .rss 別名
+### Fixed
+- **現狀**: Apple Podcasts Connect 使用者嘗試改填 `https://daily-bible-bot-trigger.tokpmpm.workers.dev/feed.rss` 時，Worker 原先回傳 404；修正 `.rss` GET 後，節目仍長時間停在「處理節目詳細資訊」。
+- **根本原因 (Root Cause)**: Cloudflare Worker 僅實作 `/podcast.xml` 的 GET RSS 路由，尚未提供 `.rss` 結尾的 feed URL 別名；且 Apple 可能使用 HEAD 預先探測 RSS，但 `/podcast.xml` 與 `/feed.rss` 的 HEAD 請求仍回傳 404。
+- **修正方案**: 將 Podcast RSS 路由擴充為同時支援 `/podcast.xml` 與 `/feed.rss` 的 GET/HEAD，兩者共用同一個 `podcastFeedResponse()` 輸出；HEAD 回應保留 RSS headers 與 Content-Length，但不回傳 body。
+- **驗證結果**: 已部署 Cloudflare Worker version `f5ca917d-c5de-4251-8402-361c047eb051`；正式環境 `/feed.rss` 與 `/podcast.xml` 均回傳新頻道名稱「安靜三分鐘」與新頻道介紹，且 `atom:link rel="self"` 會依實際請求分別指向 `/feed.rss` 或 `/podcast.xml`。
+
+### Changed
+- 將 Podcast 頻道名稱改為「安靜三分鐘」，頻道介紹改為「每日 3 分鐘，陪你在聲音裡安靜、聆聽、禱告，把分散的心重新對齊神。」。
+
 ## [2026-05-27] - Podcast RSS 與 Cloudflare R2 音檔儲存
 ### Added
 - 新增 Cloudflare R2 作為正式音檔儲存來源，LINE、Telegram、網站播放器與 Podcast RSS 共用同一個公開 MP3 URL。

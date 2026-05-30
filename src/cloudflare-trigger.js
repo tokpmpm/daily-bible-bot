@@ -12,7 +12,8 @@ export default {
       return jsonResponse({ ok: true, service: "daily-bible-bot-trigger" });
     }
 
-    if (url.pathname === "/podcast.xml" && request.method === "GET") {
+    const isPodcastFeed = url.pathname === "/podcast.xml" || url.pathname === "/feed.rss";
+    if (isPodcastFeed && (request.method === "GET" || request.method === "HEAD")) {
       return podcastFeedResponse(request, env);
     }
 
@@ -112,6 +113,7 @@ async function uploadAudioResponse(request, env, url) {
 }
 
 async function podcastFeedResponse(request, env) {
+  const headOnly = request.method === "HEAD";
   const required = ["SUPABASE_URL", "SUPABASE_ANON_KEY"];
   const missing = required.filter((key) => !env[key]);
 
@@ -119,6 +121,7 @@ async function podcastFeedResponse(request, env) {
     return xmlResponse(
       `<?xml version="1.0" encoding="UTF-8"?><error>Missing ${escapeXml(missing.join(", "))}</error>`,
       500,
+      headOnly,
     );
   }
 
@@ -145,13 +148,14 @@ async function podcastFeedResponse(request, env) {
     return xmlResponse(
       `<?xml version="1.0" encoding="UTF-8"?><error>Supabase returned ${response.status}</error>`,
       502,
+      headOnly,
     );
   }
 
   const rows = (await response.json()).filter((item) => {
     return item.audio_url && Number(item.audio_size_bytes || 0) > 0;
   });
-  const feedUrl = new URL("/podcast.xml", request.url).toString();
+  const feedUrl = request.url;
   const siteUrl = env.PODCAST_SITE_URL || "https://tokpmpm.github.io/daily-bible-bot/";
   const title = env.PODCAST_TITLE || "每日靈修";
   const description = env.PODCAST_DESCRIPTION || "每日聖經經文、靈修短文與禱告。";
@@ -205,7 +209,7 @@ ${items}
 </rss>
 `;
 
-  return xmlResponse(xml);
+  return xmlResponse(xml, 200, headOnly);
 }
 
 function jsonResponse(body, status = 200) {
@@ -217,12 +221,13 @@ function jsonResponse(body, status = 200) {
   });
 }
 
-function xmlResponse(body, status = 200) {
-  return new Response(body, {
+function xmlResponse(body, status = 200, headOnly = false) {
+  return new Response(headOnly ? null : body, {
     status,
     headers: {
       "Content-Type": "application/rss+xml; charset=utf-8",
       "Cache-Control": "public, max-age=300",
+      "Content-Length": String(new TextEncoder().encode(body).length),
     },
   });
 }
