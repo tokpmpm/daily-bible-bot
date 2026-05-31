@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2026-05-31] - Podcast episode description 排版
+### Changed
+- Podcast episode description 改成「今日經文 / 靈修默想 / 今日禱告」三段式格式，並移除 RSS 中重複出現的開頭經文段落。
+- Episode RSS 新增 `content:encoded` HTML 版本，保留 `description` 與 `itunes:summary` 的純文字版本，提升 Apple Podcasts 與其他 podcast app 的 show notes 顯示相容性。
+- Podcast cover 圖中文字更新為「安靜三分鐘」。
+- **驗證結果**: 已部署 Cloudflare Worker version `f8ef795d-e9d5-44c8-a2c9-b00a921a69b5`；正式環境 `/feed.rss` 與 `/podcast.xml` 均回傳新版 episode description 排版。
+
 ## [2026-05-30] - Podcast RSS .rss 別名
 ### Fixed
 - **現狀**: Apple Podcasts Connect 使用者嘗試改填 `https://daily-bible-bot-trigger.tokpmpm.workers.dev/feed.rss` 時，Worker 原先回傳 404；修正 `.rss` GET 後，節目仍長時間停在「處理節目詳細資訊」。

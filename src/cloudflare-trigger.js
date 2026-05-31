@@ -172,7 +172,8 @@ async function podcastFeedResponse(request, env) {
 
   const items = rows.map((item) => {
     const episodeTitle = `每日靈修 - ${item.verse_reference || item.date}`;
-    const episodeDescription = `${item.verse_text || ""}\n\n${item.exposition || ""}`.trim();
+    const episodeDescription = buildEpisodeDescription(item);
+    const episodeHtmlDescription = buildEpisodeHtmlDescription(episodeDescription);
     const pubDate = new Date(item.published_at || item.date).toUTCString();
     const guid = item.podcast_guid || `daily-bible-${item.date}`;
 
@@ -180,6 +181,7 @@ async function podcastFeedResponse(request, env) {
     <item>
       <title>${escapeXml(episodeTitle)}</title>
       <description>${escapeXml(episodeDescription)}</description>
+      <content:encoded><![CDATA[${episodeHtmlDescription}]]></content:encoded>
       <itunes:summary>${escapeXml(episodeDescription)}</itunes:summary>
       <pubDate>${escapeXml(pubDate)}</pubDate>
       <guid isPermaLink="false">${escapeXml(guid)}</guid>
@@ -190,7 +192,7 @@ async function podcastFeedResponse(request, env) {
   }).join("");
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
   <channel>
     <title>${escapeXml(title)}</title>
     <link>${escapeXml(siteUrl)}</link>
@@ -239,6 +241,80 @@ function escapeXml(value) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&apos;");
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function buildEpisodeDescription(item) {
+  const verse = normalizeInlineText(item.verse_text || "");
+  const reference = normalizeInlineText(item.verse_reference || "");
+  const bodyParagraphs = stripRepeatedOpeningVerse(item.exposition || "", verse, reference);
+  const prayerIndex = bodyParagraphs.findIndex((paragraph) => paragraph.includes("我們一起來禱告"));
+  const reflection = prayerIndex >= 0 ? bodyParagraphs.slice(0, prayerIndex) : bodyParagraphs;
+  const prayer = prayerIndex >= 0 ? bodyParagraphs.slice(prayerIndex) : [];
+  const sections = [];
+
+  if (verse) {
+    sections.push("【今日經文】");
+    sections.push(reference ? `${verse}（${reference}）` : verse);
+  }
+
+  if (reflection.length) {
+    sections.push("");
+    sections.push("【靈修默想】");
+    sections.push(reflection.join("\n\n"));
+  }
+
+  if (prayer.length) {
+    sections.push("");
+    sections.push("【今日禱告】");
+    sections.push(prayer.join("\n\n"));
+  }
+
+  return sections.join("\n").trim();
+}
+
+function buildEpisodeHtmlDescription(description) {
+  return description
+    .split(/\n{2,}/)
+    .map((block) => `<p>${escapeHtml(block).replace(/\n/g, "<br>")}</p>`)
+    .join("");
+}
+
+function stripRepeatedOpeningVerse(exposition, verse, reference) {
+  const paragraphs = splitParagraphs(exposition);
+  if (!paragraphs.length) {
+    return [];
+  }
+
+  const firstParagraph = normalizeInlineText(paragraphs[0]);
+  const firstParagraphHasVerse = verse && firstParagraph.includes(verse);
+  const firstParagraphHasReference = reference && firstParagraph.includes(reference);
+
+  if (firstParagraphHasVerse || (firstParagraphHasReference && firstParagraph.length < 120)) {
+    return paragraphs.slice(1);
+  }
+
+  return paragraphs;
+}
+
+function splitParagraphs(value) {
+  return String(value || "")
+    .replace(/\r\n/g, "\n")
+    .split(/\n{2,}|\n/)
+    .map((paragraph) => normalizeInlineText(paragraph))
+    .filter(Boolean);
+}
+
+function normalizeInlineText(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
 }
 
 function formatDuration(milliseconds) {
