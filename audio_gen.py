@@ -6,6 +6,15 @@ from config import OPENAI_API_KEY
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+TTS_MODEL = "gpt-4o-mini-tts"
+TTS_VOICE = "nova"
+TTS_INSTRUCTIONS = (
+    "請使用自然的台灣華語朗讀。特別注意中文破音字與聖經語境："
+    "重新、重生讀作 chong；重量讀作 zhong；長老讀作 zhang；"
+    "長久讀作 chang；行走讀作 xing；音樂讀作 yue；喜樂讀作 le。"
+    "語速穩定，像每日靈修旁白。"
+)
+
 def generate_audio(text, output_path="daily_message.mp3"):
     """
     Generates audio from text using OpenAI TTS API.
@@ -20,9 +29,10 @@ def generate_audio(text, output_path="daily_message.mp3"):
         "Content-Type": "application/json"
     }
     data = {
-        "model": "tts-1",
+        "model": TTS_MODEL,
         "input": text,
-        "voice": "nova"  # Female voice, speaks Mandarin well
+        "voice": TTS_VOICE,
+        "instructions": TTS_INSTRUCTIONS
     }
 
     max_retries = 3
@@ -52,13 +62,10 @@ if __name__ == "__main__":
     text = "這是每日聖經靈修的測試語音。神賜給我們，不是膽怯的心，乃是剛強、仁愛、謹守的心。"
     
     print(f"\n{'='*60}")
-    print("🎤 TTS Voice Rotation Test")
+    print("🎤 TTS Test")
     print(f"{'='*60}")
-    
-    voice = get_today_voice()
-    print(f"Today's voice: {voice['name']}")
-    print(f"Voice type: {voice['type']}")
-    print(f"Voice ID: {voice['voice']}")
+    print(f"Model: {TTS_MODEL}")
+    print(f"Voice: {TTS_VOICE}")
     print(f"{'='*60}\n")
     
     output = generate_audio(text)
