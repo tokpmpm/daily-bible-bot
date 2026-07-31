@@ -40,6 +40,9 @@ jobs:
             content_gen.py \
             audio_gen.py
 
+      - name: Remove stale MP3 before test
+        run: rm -f daily_message.mp3
+
       - name: Run full daily Bible flow test
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

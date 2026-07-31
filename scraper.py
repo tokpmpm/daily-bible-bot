@@ -38,13 +38,29 @@ def get_daily_verse():
         res = requests.get(url, headers=headers, timeout=10)
         res.raise_for_status()
         
-        m = re.search(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', res.text)
-        if not m:
-            logging.warning("Could not find __NEXT_DATA__ in HTML. Bible.com structure might have changed.")
-            return None
-            
-        data = json.loads(m.group(1)).get('props', {}).get('pageProps', {})
-        ref_title = data.get('referenceTitle', {}).get('title', '')
+        data = {}
+        ref_title = ""
+
+        m = re.search(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', res.text, re.S)
+        if m:
+            data = json.loads(m.group(1)).get('props', {}).get('pageProps', {})
+            ref_title = data.get('referenceTitle', {}).get('title', '')
+
+        if not ref_title:
+            # Bible.com now renders the reference in the HTML title instead of
+            # exposing the old __NEXT_DATA__ script. Keep this fallback so the
+            # daily flow survives that frontend implementation change.
+            title_match = re.search(
+                r'<title[^>]*>\s*[^<]*?\s+-\s+'
+                r'([1-3]?\s*[A-Za-z][A-Za-z ]*\s+\d+:\d+(?:[-,]\d+)?)\s+-\s+'
+                r'[^<]*</title>',
+                res.text,
+                re.I | re.S,
+            )
+            if title_match:
+                ref_title = title_match.group(1).strip()
+                logging.info("Using Bible.com HTML title fallback for reference: %s", ref_title)
+
         if not ref_title:
             logging.warning("Could not find referenceTitle in data.")
             return None
