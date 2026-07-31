@@ -1,0 +1,85 @@
+name: One-off Yong Pronunciation Test
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/oneoff_yong_pronunciation_test.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  pronunciation-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Edge TTS
+        run: python -m pip install edge-tts
+
+      - name: Generate comparison clips
+        run: |
+          edge-tts \
+            --voice zh-TW-HsiaoChenNeural \
+            --rate=-5% \
+            --volume=+0% \
+            --pitch=+0Hz \
+            --text "願祂得着榮耀，直到世世代代，永永遠遠。阿們。" \
+            --write-media original-yong.mp3
+
+          edge-tts \
+            --voice zh-TW-HsiaoChenNeural \
+            --rate=-5% \
+            --volume=+0% \
+            --pitch=+0Hz \
+            --text "願祂得着榮耀，直到世世代代，勇勇遠遠。阿們。" \
+            --write-media adjusted-yong.mp3
+
+          test -s original-yong.mp3
+          test -s adjusted-yong.mp3
+
+      - name: Send original pronunciation to Telegram test chat
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_TEST_CHAT_ID: ${{ secrets.TELEGRAM_TEST_CHAT_ID }}
+        run: |
+          curl --silent --show-error --fail-with-body \
+            --request POST \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendAudio" \
+            --form "chat_id=${TELEGRAM_TEST_CHAT_ID}" \
+            --form "audio=@original-yong.mp3" \
+            --form "title=原始發音：永永遠遠" \
+            --form "performer=HsiaoChen Edge TTS" \
+            --form "caption=比較 A：原始文字「永永遠遠」"
+
+      - name: Send adjusted pronunciation to Telegram test chat
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_TEST_CHAT_ID: ${{ secrets.TELEGRAM_TEST_CHAT_ID }}
+        run: |
+          curl --silent --show-error --fail-with-body \
+            --request POST \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendAudio" \
+            --form "chat_id=${TELEGRAM_TEST_CHAT_ID}" \
+            --form "audio=@adjusted-yong.mp3" \
+            --form "title=修正發音：勇勇遠遠" \
+            --form "performer=HsiaoChen Edge TTS" \
+            --form "caption=比較 B：TTS 隱藏文字「勇勇遠遠」"
+
+      - name: Upload comparison artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yong-pronunciation-comparison
+          path: |
+            original-yong.mp3
+            adjusted-yong.mp3
+          retention-days: 3
+          if-no-files-found: warn
