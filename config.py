@@ -1,4 +1,9 @@
+import logging
 import os
+
+
+logger = logging.getLogger(__name__)
+
 
 def load_env_manual():
     """
@@ -22,12 +27,43 @@ def load_env_manual():
 
 load_env_manual()
 
+
+def positive_int_env(name, default):
+    """Read a positive integer environment variable without breaking imports."""
+    raw_value = os.getenv(name)
+    if raw_value is None or raw_value == "":
+        return default
+
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError):
+        logger.warning("Invalid %s=%r; using default %d.", name, raw_value, default)
+        return default
+
+    if value <= 0:
+        logger.warning("Invalid %s=%r; using default %d.", name, raw_value, default)
+        return default
+
+    return value
+
+
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_TTS_MODEL = os.getenv("OPENAI_TTS_MODEL", "gpt-4o-mini-tts")
+OPENAI_TTS_VOICE = os.getenv("OPENAI_TTS_VOICE", "nova")
+TTS_STYLE_INSTRUCTIONS = (
+    "請使用自然、溫暖的台灣華語女聲朗讀。"
+    "語速穩定、清楚，像每日靈修 Podcast 的旁白。"
+    "經文莊重但不要像新聞播報，解經親切自然，禱告真摯柔和。"
+    "忠實朗讀內容，不可摘要、改寫、加字或省略。"
+    "注意中文破音字、聖經用語與數字段落的自然停頓。"
+)
 RUN_MODE = os.getenv("RUN_MODE", "production").strip().lower()
 TTS_VOICE = os.getenv("TTS_VOICE", "zh-TW-HsiaoChenNeural")
 TTS_RATE = os.getenv("TTS_RATE", "-5%")
 TTS_VOLUME = os.getenv("TTS_VOLUME", "+0%")
 TTS_PITCH = os.getenv("TTS_PITCH", "+0Hz")
+EDGE_TTS_MAX_ATTEMPTS = positive_int_env("EDGE_TTS_MAX_ATTEMPTS", 3)
+OPENAI_TTS_MAX_ATTEMPTS = positive_int_env("OPENAI_TTS_MAX_ATTEMPTS", 3)
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
 

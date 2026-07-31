@@ -169,7 +169,7 @@ def send_full_test_to_telegram(chat_id: str, text: str, audio_path: str) -> bool
                     "chat_id": chat_id,
                     "title": "每日靈修完整流程測試",
                     "performer": "Daily Bible Bot",
-                    "caption": "完整流程測試，未發布至正式 Podcast、LINE 或 Telegram 名單",
+                    "caption": "完整流程測試，未發布至正式 Podcast、LINE、Supabase 或 Telegram 名單",
                 },
                 files={
                     "audio": ("daily_message.mp3", audio_file, "audio/mpeg")
@@ -503,7 +503,9 @@ def run_daily_task() -> bool:
             audio_size_bytes,
             telegram_sent,
         )
-        return telegram_sent
+        if not telegram_sent:
+            return False
+        return True
 
     # 5. Construct LINE Messages
     messages = [
