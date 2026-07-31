@@ -1,73 +1,128 @@
-import requests
+import asyncio
 import logging
-import time
-from config import OPENAI_API_KEY
+import os
+
+import edge_tts
+
+from config import TTS_PITCH, TTS_RATE, TTS_VOICE, TTS_VOLUME
+
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-TTS_MODEL = "gpt-4o-mini-tts"
-TTS_VOICE = "nova"
-TTS_INSTRUCTIONS = (
-    "請使用自然的台灣華語朗讀。特別注意中文破音字與聖經語境："
-    "重新、重生讀作 chong；重量讀作 zhong；長老讀作 zhang；"
-    "長久讀作 chang；行走讀作 xing；音樂讀作 yue；喜樂讀作 le。"
-    "語速穩定，像每日靈修旁白。"
-)
+MAX_ATTEMPTS = 3
+
+
+def _cleanup_temp_file(temp_path):
+    """Remove a temporary TTS file without masking the original failure."""
+    try:
+        os.remove(temp_path)
+    except FileNotFoundError:
+        pass
+    except OSError as cleanup_error:
+        logging.error(
+            "Failed to remove temporary TTS file %s: %s: %s",
+            temp_path,
+            type(cleanup_error).__name__,
+            str(cleanup_error),
+        )
+
+
+async def _generate_audio_async(text, output_path):
+    """Generate audio with Edge TTS and atomically publish the completed file."""
+    temp_path = f"{output_path}.tmp"
+    _cleanup_temp_file(temp_path)
+
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            communicate = edge_tts.Communicate(
+                text=text,
+                voice=TTS_VOICE,
+                rate=TTS_RATE,
+                volume=TTS_VOLUME,
+                pitch=TTS_PITCH,
+            )
+            await communicate.save(temp_path)
+
+            if not os.path.exists(temp_path):
+                raise FileNotFoundError(
+                    f"Edge TTS did not create the temporary file: {temp_path}"
+                )
+
+            temp_size = os.path.getsize(temp_path)
+            if temp_size <= 0:
+                raise ValueError(
+                    f"Edge TTS created an empty temporary file: {temp_path}"
+                )
+
+            os.replace(temp_path, output_path)
+            logging.info(
+                "Successfully generated audio at %s (voice=%s, rate=%s, volume=%s, pitch=%s)",
+                output_path,
+                TTS_VOICE,
+                TTS_RATE,
+                TTS_VOLUME,
+                TTS_PITCH,
+            )
+            return output_path
+        except Exception as error:
+            logging.warning(
+                "TTS attempt %d/%d failed (voice=%s, rate=%s, volume=%s, pitch=%s): %s: %s",
+                attempt,
+                MAX_ATTEMPTS,
+                TTS_VOICE,
+                TTS_RATE,
+                TTS_VOLUME,
+                TTS_PITCH,
+                type(error).__name__,
+                str(error),
+            )
+            _cleanup_temp_file(temp_path)
+
+            if attempt < MAX_ATTEMPTS:
+                retry_delay = 2 ** attempt
+                logging.info(
+                    "Retrying TTS in %d seconds after attempt %d/%d",
+                    retry_delay,
+                    attempt,
+                    MAX_ATTEMPTS,
+                )
+                await asyncio.sleep(retry_delay)
+
+    logging.error(
+        "TTS failed after %d attempts (voice=%s, rate=%s, volume=%s, pitch=%s)",
+        MAX_ATTEMPTS,
+        TTS_VOICE,
+        TTS_RATE,
+        TTS_VOLUME,
+        TTS_PITCH,
+    )
+    return None
+
 
 def generate_audio(text, output_path="daily_message.mp3"):
     """
-    Generates audio from text using OpenAI TTS API.
+    Generate audio from text using Microsoft Edge TTS.
+
+    Returns the output path on success, or None if all attempts fail.
     """
-    if not OPENAI_API_KEY:
-        logging.error("OPENAI_API_KEY is not set.")
-        return None
+    return asyncio.run(_generate_audio_async(text, output_path))
 
-    url = "https://api.openai.com/v1/audio/speech"
-    headers = {
-        "Authorization": f"Bearer {OPENAI_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    data = {
-        "model": TTS_MODEL,
-        "input": text,
-        "voice": TTS_VOICE,
-        "instructions": TTS_INSTRUCTIONS
-    }
-
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            response = requests.post(url, headers=headers, json=data, timeout=120)
-            response.raise_for_status()
-            
-            with open(output_path, "wb") as f:
-                for chunk in response.iter_content(chunk_size=1024):
-                    if chunk:
-                        f.write(chunk)
-                
-            logging.info(f"Successfully generated audio at {output_path}")
-            return output_path
-        except Exception as e:
-            logging.warning(f"Attempt {attempt + 1} failed: {e}")
-            if attempt == max_retries - 1:
-                logging.error(f"Error generating audio after {max_retries} attempts: {e}")
-                if 'response' in locals():
-                    logging.error(f"Response: {response.text}")
-                return None
-            time.sleep(2)  # Wait before retry
 
 if __name__ == "__main__":
-    # Manual test
-    text = "這是每日聖經靈修的測試語音。神賜給我們，不是膽怯的心，乃是剛強、仁愛、謹守的心。"
-    
-    print(f"\n{'='*60}")
+    text = """生死在舌頭的權下，喜愛它的，必吃它所結的果子。箴言十八章二十一節。
+
+這節經文提醒我們，言語的力量不容小覷。願我們所說的話，能成為帶來生命和光明的工具。阿們。"""
+
+    print("\n" + "=" * 60)
     print("🎤 TTS Test")
-    print(f"{'='*60}")
-    print(f"Model: {TTS_MODEL}")
+    print("=" * 60)
     print(f"Voice: {TTS_VOICE}")
-    print(f"{'='*60}\n")
-    
+    print(f"Rate: {TTS_RATE}")
+    print(f"Volume: {TTS_VOLUME}")
+    print(f"Pitch: {TTS_PITCH}")
+    print("=" * 60 + "\n")
+
     output = generate_audio(text)
     if output:
         print(f"✅ Audio generated: {output}")

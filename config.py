@@ -23,6 +23,10 @@ def load_env_manual():
 load_env_manual()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+TTS_VOICE = os.getenv("TTS_VOICE", "zh-TW-HsiaoChenNeural")
+TTS_RATE = os.getenv("TTS_RATE", "-5%")
+TTS_VOLUME = os.getenv("TTS_VOLUME", "+0%")
+TTS_PITCH = os.getenv("TTS_PITCH", "+0Hz")
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
 

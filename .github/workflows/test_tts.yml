@@ -1,0 +1,118 @@
+name: Test HsiaoChen TTS
+
+on:
+  workflow_dispatch:
+    inputs:
+      rate:
+        description: "Speech rate"
+        required: false
+        default: "-5%"
+
+permissions:
+  contents: read
+
+jobs:
+  test-tts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: List Edge TTS voices
+        run: edge-tts --list-voices > voices.txt
+
+      - name: Verify HsiaoChen voice is available
+        run: grep -Fq "zh-TW-HsiaoChenNeural" voices.txt
+
+      - name: Generate HsiaoChen test MP3
+        env:
+          TTS_VOICE: zh-TW-HsiaoChenNeural
+          TTS_RATE: ${{ github.event.inputs.rate }}
+          TTS_VOLUME: "+0%"
+          TTS_PITCH: "+0Hz"
+        run: python audio_gen.py
+
+      - name: Validate generated MP3
+        run: |
+          test -s daily_message.mp3
+          ffprobe \
+            -v error \
+            -show_entries format=duration,size \
+            -of json \
+            daily_message.mp3
+          python - <<'PY'
+          from pydub import AudioSegment
+
+          audio = AudioSegment.from_mp3("daily_message.mp3")
+          assert len(audio) > 0
+          print(f"Audio duration: {len(audio)} ms")
+          PY
+
+      - name: Send MP3 to Telegram test chat
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_TEST_CHAT_ID: ${{ secrets.TELEGRAM_TEST_CHAT_ID }}
+        run: |
+          set -euo pipefail
+          response_file="$(mktemp)"
+          curl_status=0
+          curl --silent --show-error --fail-with-body \
+            --request POST \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendAudio" \
+            --form "chat_id=${TELEGRAM_TEST_CHAT_ID}" \
+            --form "audio=@daily_message.mp3" \
+            --form "title=HsiaoChen TTS 測試" \
+            --form "performer=Daily Bible Bot" \
+            --form "caption=GitHub Actions 語音測試，未發布至正式 Podcast、LINE 或 Telegram 名單" \
+            --output "$response_file" || curl_status=$?
+
+          cat "$response_file"
+          if [ "$curl_status" -ne 0 ]; then
+            exit "$curl_status"
+          fi
+
+          python - "$response_file" <<'PY'
+          import json
+          import sys
+
+          response_text = open(sys.argv[1], encoding="utf-8").read()
+          try:
+              result = json.loads(response_text)
+          except json.JSONDecodeError as error:
+              raise SystemExit(
+                  f"Telegram API returned invalid JSON ({type(error).__name__}: {error}):\n"
+                  f"{response_text}"
+              )
+
+          if result.get("ok") is not True:
+              raise SystemExit(
+                  "Telegram API returned ok != true; full response:\n"
+                  f"{response_text}"
+              )
+
+          print("Telegram API response ok == true")
+          PY
+
+      - name: Upload HsiaoChen TTS artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: HsiaoChen-TTS-test
+          path: daily_message.mp3
+          retention-days: 3
+          if-no-files-found: error

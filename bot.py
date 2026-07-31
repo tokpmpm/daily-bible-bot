@@ -321,7 +321,7 @@ def run_daily_task():
 
     # 3. Generate Audio
     audio_text = f"今日靈修。{verse_data['reference']}。{verse_data['text']}。{exposition}"
-    audio_path = generate_audio(audio_text[:4096]) # API limit check
+    audio_path = generate_audio(audio_text)
     
     if audio_path:
         logging.info(f"Audio generated at {audio_path}")
