@@ -16,7 +16,9 @@ from config import (
     AUDIO_UPLOAD_URL,
     AUDIO_UPLOAD_SECRET,
     R2_PUBLIC_BASE_URL,
-    DRY_RUN
+    DRY_RUN,
+    RUN_MODE,
+    TELEGRAM_TEST_CHAT_ID,
 )
 from scraper import get_daily_verse
 from content_gen import generate_exposition
@@ -102,6 +104,110 @@ def push_to_telegram_chat(chat_id: str, text: str, audio_url: str = None) -> boo
         logging.error(f"Error pushing to Telegram chat {chat_id}: {e}")
         if 'response' in locals():
             logging.error(f"Response: {response.text}")
+        return False
+
+
+def send_full_test_to_telegram(chat_id: str, text: str, audio_path: str) -> bool:
+    """Send full-flow test text and a local MP3 only to the configured test chat."""
+    if not TELEGRAM_TEST_CHAT_ID:
+        logging.error("Full test Telegram send refused: TELEGRAM_TEST_CHAT_ID is not set.")
+        return False
+
+    if chat_id.strip() != TELEGRAM_TEST_CHAT_ID:
+        logging.error(
+            "Full test Telegram send refused: the destination must match "
+            "TELEGRAM_TEST_CHAT_ID."
+        )
+        return False
+
+    if not TELEGRAM_BOT_TOKEN:
+        logging.error("Full test Telegram send refused: TELEGRAM_BOT_TOKEN is not set.")
+        return False
+
+    if not os.path.isfile(audio_path) or os.path.getsize(audio_path) <= 0:
+        logging.error(
+            "Full test Telegram send refused: audio file is missing or empty: %s",
+            audio_path,
+        )
+        return False
+
+    base_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
+
+    try:
+        message_response = requests.post(
+            f"{base_url}/sendMessage",
+            data={
+                "chat_id": chat_id,
+                "text": text,
+            },
+            timeout=120,
+        )
+        message_response.raise_for_status()
+        try:
+            message_result = message_response.json()
+        except ValueError as error:
+            logging.error(
+                "Full test Telegram sendMessage returned invalid JSON "
+                "(%s: %s): %s",
+                type(error).__name__,
+                str(error),
+                message_response.text,
+            )
+            return False
+
+        if message_result.get("ok") is not True:
+            logging.error(
+                "Full test Telegram sendMessage failed; full response: %s",
+                message_response.text,
+            )
+            return False
+
+        with open(audio_path, "rb") as audio_file:
+            audio_response = requests.post(
+                f"{base_url}/sendAudio",
+                data={
+                    "chat_id": chat_id,
+                    "title": "每日靈修完整流程測試",
+                    "performer": "Daily Bible Bot",
+                    "caption": "完整流程測試，未發布至正式 Podcast、LINE 或 Telegram 名單",
+                },
+                files={
+                    "audio": ("daily_message.mp3", audio_file, "audio/mpeg")
+                },
+                timeout=120,
+            )
+        audio_response.raise_for_status()
+        try:
+            audio_result = audio_response.json()
+        except ValueError as error:
+            logging.error(
+                "Full test Telegram sendAudio returned invalid JSON "
+                "(%s: %s): %s",
+                type(error).__name__,
+                str(error),
+                audio_response.text,
+            )
+            return False
+
+        if audio_result.get("ok") is not True:
+            logging.error(
+                "Full test Telegram sendAudio failed; full response: %s",
+                audio_response.text,
+            )
+            return False
+
+        logging.info("Full test Telegram text and local MP3 sent successfully.")
+        return True
+    except Exception as error:
+        logging.error(
+            "Full test Telegram send failed: %s: %s",
+            type(error).__name__,
+            str(error),
+        )
+        if "message_response" in locals():
+            logging.error("Full test sendMessage response: %s", message_response.text)
+        if "audio_response" in locals():
+            logging.error("Full test sendAudio response: %s", audio_response.text)
         return False
 
 
@@ -297,8 +403,9 @@ def send_web_push_notifications(title: str, body: str, url: str = None):
         logging.error(f"Error sending web push: {e}")
 
 
-def run_daily_task():
+def run_daily_task() -> bool:
     logging.info("Starting daily task...")
+    effective_dry_run = DRY_RUN or RUN_MODE == "dry_run"
     publish_date = datetime.now().strftime("%Y-%m-%d")
     published_at = datetime.now(timezone.utc).isoformat()
     podcast_guid = f"daily-bible-{publish_date}"
@@ -307,7 +414,7 @@ def run_daily_task():
     verse_data = get_daily_verse()
     if not verse_data:
         logging.error("Failed to get daily verse. Aborting.")
-        return
+        return False
 
     logging.info(f"Verse fetched: {verse_data['reference']}")
 
@@ -315,7 +422,7 @@ def run_daily_task():
     exposition = generate_exposition(verse_data)
     if not exposition:
         logging.error("Failed to generate exposition. Aborting.")
-        return
+        return False
 
     logging.info("Exposition generated.")
 
@@ -326,7 +433,8 @@ def run_daily_task():
     if audio_path:
         logging.info(f"Audio generated at {audio_path}")
     else:
-        logging.warning("Audio generation failed.")
+        logging.error("Audio generation failed. Aborting.")
+        return False
 
     # 4. Prepare podcast-ready audio metadata and upload to R2
     audio_url = None
@@ -343,14 +451,59 @@ def run_daily_task():
             audio_size_bytes = os.path.getsize(audio_path)
             logging.info(f"Audio size: {audio_size_bytes} bytes")
 
-            if DRY_RUN:
+            if RUN_MODE == "full_test":
+                logging.info("Full test mode: deferring external publication decisions.")
+            elif effective_dry_run:
                 logging.info("DRY_RUN enabled. Skipping R2 audio upload.")
             else:
                 audio_url = upload_audio_to_r2(audio_path, publish_date)
                 if not audio_url:
                     logging.error("Failed to upload audio to R2. Proceeding without audio URL.")
         except Exception as e:
-            logging.error(f"Error processing audio: {e}")
+            logging.error(f"Error processing audio: {type(e).__name__}: {e}")
+            return False
+
+    if RUN_MODE == "full_test":
+        logging.info("FULL TEST MODE ENABLED")
+        logging.info("Skipping Cloudflare R2 upload")
+        logging.info("Skipping LINE broadcast")
+        logging.info("Skipping production Telegram recipients")
+        logging.info("Skipping Supabase write")
+        logging.info("Skipping Podcast publication")
+        logging.info("Skipping Web Push")
+
+        if not TELEGRAM_TEST_CHAT_ID:
+            logging.error("Full test requires TELEGRAM_TEST_CHAT_ID.")
+            return False
+        if not TELEGRAM_BOT_TOKEN:
+            logging.error("Full test requires TELEGRAM_BOT_TOKEN.")
+            return False
+        if not os.path.exists(audio_path) or os.path.getsize(audio_path) <= 0:
+            logging.error("Full test requires a non-empty local MP3: %s", audio_path)
+            return False
+
+        telegram_text = (
+            "🧪 每日靈修完整流程測試\n\n"
+            f"{verse_data['reference']}\n"
+            f"{verse_data['text']}\n\n"
+            f"{exposition}"
+        )
+        telegram_sent = send_full_test_to_telegram(
+            TELEGRAM_TEST_CHAT_ID,
+            telegram_text,
+            audio_path,
+        )
+        logging.info(
+            "Full test result: reference=%s exposition_length=%d audio_path=%s "
+            "audio_duration=%dms audio_size_bytes=%d telegram_sent=%s",
+            verse_data["reference"],
+            len(exposition),
+            audio_path,
+            audio_duration,
+            audio_size_bytes,
+            telegram_sent,
+        )
+        return telegram_sent
 
     # 5. Construct LINE Messages
     messages = [
@@ -370,7 +523,7 @@ def run_daily_task():
 
     # 6. Send via LINE
     # Only send if we are in production or have tokens.
-    if DRY_RUN:
+    if effective_dry_run:
         logging.info("DRY_RUN enabled. Skipping LINE broadcast.")
         print("=== Message Content ===")
         print(json.dumps(messages, indent=2, ensure_ascii=False))
@@ -382,7 +535,7 @@ def run_daily_task():
         print(json.dumps(messages, indent=2, ensure_ascii=False))
 
     # 7. Push to all configured Telegram chats
-    if DRY_RUN:
+    if effective_dry_run:
         logging.info("DRY_RUN enabled. Skipping Telegram push.")
     elif TELEGRAM_CHAT_IDS:
         # Format text for Telegram (Markdown)
@@ -395,7 +548,7 @@ def run_daily_task():
 
     # 8. 儲存至 Supabase
     record_id = None
-    if DRY_RUN:
+    if effective_dry_run:
         logging.info("DRY_RUN enabled. Skipping Supabase save.")
     else:
         record_id = save_to_supabase(
@@ -412,7 +565,7 @@ def run_daily_task():
             logging.info(f"Content saved to Supabase with ID: {record_id}")
     
     # 9. 發送 Web Push 通知
-    if DRY_RUN:
+    if effective_dry_run:
         logging.info("DRY_RUN enabled. Skipping Web Push notifications.")
     elif record_id:
         send_web_push_notifications(
@@ -422,7 +575,10 @@ def run_daily_task():
         )
     
     logging.info("Daily task completed successfully!")
+    return True
 
 
 if __name__ == "__main__":
-    run_daily_task()
+    success = run_daily_task()
+    if not success:
+        raise SystemExit(1)

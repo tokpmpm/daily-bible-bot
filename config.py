@@ -23,6 +23,7 @@ def load_env_manual():
 load_env_manual()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+RUN_MODE = os.getenv("RUN_MODE", "production").strip().lower()
 TTS_VOICE = os.getenv("TTS_VOICE", "zh-TW-HsiaoChenNeural")
 TTS_RATE = os.getenv("TTS_RATE", "-5%")
 TTS_VOLUME = os.getenv("TTS_VOLUME", "+0%")
@@ -32,6 +33,7 @@ LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
 
 # Telegram Bot API
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_TEST_CHAT_ID = os.getenv("TELEGRAM_TEST_CHAT_ID", "").strip()
 TELEGRAM_CHAT_IDS = [cid.strip() for cid in os.getenv("TELEGRAM_CHAT_IDS", "").split(",") if cid.strip()]
 
 # Supabase Configuration

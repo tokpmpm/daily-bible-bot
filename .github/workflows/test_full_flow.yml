@@ -1,0 +1,79 @@
+name: Test Full Daily Bible Flow
+
+on:
+  workflow_dispatch:
+    inputs:
+      rate:
+        description: "HsiaoChen speech rate"
+        required: false
+        default: "-5%"
+
+permissions:
+  contents: read
+
+jobs:
+  full-flow-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check Python syntax
+        run: |
+          python -m py_compile \
+            bot.py \
+            config.py \
+            scraper.py \
+            content_gen.py \
+            audio_gen.py
+
+      - name: Run full daily Bible flow test
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_TEST_CHAT_ID: ${{ secrets.TELEGRAM_TEST_CHAT_ID }}
+          RUN_MODE: full_test
+          DRY_RUN: "false"
+          TTS_VOICE: zh-TW-HsiaoChenNeural
+          TTS_RATE: ${{ github.event.inputs.rate }}
+          TTS_VOLUME: "+0%"
+          TTS_PITCH: "+0Hz"
+        run: python bot.py
+
+      - name: Validate generated MP3
+        run: |
+          test -s daily_message.mp3
+          ffprobe \
+            -v error \
+            -show_entries format=duration,size \
+            -of json \
+            daily_message.mp3
+          python - <<'PY'
+          from pydub import AudioSegment
+
+          audio = AudioSegment.from_mp3("daily_message.mp3")
+          assert len(audio) > 0
+          print(f"Audio duration: {len(audio)} ms")
+          PY
+
+      - name: Upload full-flow artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Daily-Bible-full-flow-test
+          path: daily_message.mp3
+          retention-days: 3
+          if-no-files-found: warn
