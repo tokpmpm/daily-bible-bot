@@ -2,6 +2,11 @@ import requests
 import json
 import re
 import logging
+from datetime import datetime
+from urllib.parse import quote
+from zoneinfo import ZoneInfo
+
+from bs4 import BeautifulSoup
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -23,104 +28,194 @@ book_mapping = {
     "1 John": "約翰一書", "2 John": "約翰二書", "3 John": "約翰三書", "Jude": "猶大書", "Revelation": "啟示錄"
 }
 
-def get_daily_verse():
-    """
-    Fetches the Verse of the Day reference from Bible.com and 
-    retrieves the Traditional Chinese (CUV) text via bible-api.com.
-    Returns a dictionary with 'text', 'reference', and 'image_url'.
-    """
-    try:
-        url = "https://www.bible.com/zh-TW/verse-of-the-day"
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Accept-Language": "zh-TW,zh;q=0.9"
-        }
-        res = requests.get(url, headers=headers, timeout=10)
-        res.raise_for_status()
-        
-        data = {}
-        ref_title = ""
+_BOOK_LOOKUP = {book.lower(): book for book in book_mapping}
+_BOOK_PATTERN = "|".join(
+    re.escape(book) for book in sorted(book_mapping, key=len, reverse=True)
+)
+_REFERENCE_PATTERN = re.compile(
+    rf"(?<![A-Za-z0-9])(?P<book>{_BOOK_PATTERN})\s+"
+    rf"(?P<verses>\d+:\d+(?:\s*[-–—,]\s*\d+)*)"
+    rf"\s*(?:\([^)]+\))?",
+    re.IGNORECASE,
+)
 
-        m = re.search(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', res.text, re.S)
-        if m:
-            data = json.loads(m.group(1)).get('props', {}).get('pageProps', {})
-            ref_title = data.get('referenceTitle', {}).get('title', '')
 
-        if not ref_title:
-            # Bible.com now renders the reference in the HTML title instead of
-            # exposing the old __NEXT_DATA__ script. Keep this fallback so the
-            # daily flow survives that frontend implementation change.
-            title_match = re.search(
-                r'<title[^>]*>\s*[^<]*?\s+-\s+'
-                r'([1-3]?\s*[A-Za-z][A-Za-z ]*\s+\d+:\d+(?:[-,]\d+)?)\s+-\s+'
-                r'[^<]*</title>',
-                res.text,
-                re.I | re.S,
+def _normalize_reference(book: str, verses: str) -> str:
+    canonical_book = _BOOK_LOOKUP.get(book.lower(), book.strip())
+    normalized_verses = re.sub(r"\s*[–—]\s*", "-", verses)
+    normalized_verses = re.sub(r"\s*,\s*", ",", normalized_verses)
+    return f"{canonical_book} {normalized_verses.strip()}"
+
+
+def _find_reference(text: str) -> str:
+    if not text:
+        return ""
+    match = _REFERENCE_PATTERN.search(text)
+    if not match:
+        return ""
+    return _normalize_reference(match.group("book"), match.group("verses"))
+
+
+def _extract_reference_and_data(html: str):
+    """Extract a Bible reference from both old and current Bible.com markup."""
+    data = {}
+
+    # Legacy Next.js payload used by the original implementation.
+    next_data_match = re.search(
+        r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>',
+        html,
+        re.S,
+    )
+    if next_data_match:
+        try:
+            data = json.loads(next_data_match.group(1)).get("props", {}).get("pageProps", {})
+            reference_title = data.get("referenceTitle", "")
+            if isinstance(reference_title, dict):
+                reference_title = reference_title.get("title", "")
+            reference = _find_reference(str(reference_title))
+            if reference:
+                return reference, data, "__NEXT_DATA__"
+        except (TypeError, ValueError, json.JSONDecodeError) as error:
+            logging.warning("Could not parse Bible.com __NEXT_DATA__: %s", error)
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    # Some versions expose the reference in the document title.
+    if soup.title:
+        reference = _find_reference(soup.title.get_text(" ", strip=True))
+        if reference:
+            return reference, data, "html-title"
+
+    # Current Bible.com markup renders text such as "Luke 16:10 (NIV)"
+    # inside a normal link. Search likely content elements before the whole page
+    # so the main verse is selected before the previous-days list.
+    for element in soup.find_all(["a", "span", "p", "h1", "h2", "h3"]):
+        reference = _find_reference(element.get_text(" ", strip=True))
+        if reference:
+            return reference, data, "visible-content"
+
+    reference = _find_reference(soup.get_text(" ", strip=True))
+    if reference:
+        return reference, data, "page-text"
+
+    return "", data, "not-found"
+
+
+def _daily_verse_urls(now=None):
+    """Build deterministic Bible.com URLs using the user's Taiwan date."""
+    taipei_now = now or datetime.now(ZoneInfo("Asia/Taipei"))
+    day_of_year = taipei_now.timetuple().tm_yday
+    return [
+        f"https://www.bible.com/verse-of-the-day?day={day_of_year}",
+        f"https://www.bible.com/zh-TW/verse-of-the-day?day={day_of_year}",
+        "https://www.bible.com/verse-of-the-day",
+    ]
+
+
+def get_daily_verse(now=None):
+    """
+    Fetch the Verse of the Day reference from Bible.com and retrieve the
+    Traditional Chinese (CUV) text via bible-api.com.
+
+    The optional ``now`` argument exists for deterministic tests; production
+    callers can continue calling this function without arguments.
+    """
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/150.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9,zh-TW;q=0.8",
+        "Cache-Control": "no-cache",
+    }
+
+    ref_title = ""
+    data = {}
+
+    for url in _daily_verse_urls(now):
+        try:
+            response = requests.get(url, headers=headers, timeout=15)
+            response.raise_for_status()
+            ref_title, data, source = _extract_reference_and_data(response.text)
+            if ref_title:
+                logging.info(
+                    "Bible.com reference extracted via %s from %s: %s",
+                    source,
+                    response.url,
+                    ref_title,
+                )
+                break
+
+            soup = BeautifulSoup(response.text, "html.parser")
+            page_title = soup.title.get_text(" ", strip=True) if soup.title else ""
+            logging.warning(
+                "No Bible reference found from %s "
+                "(status=%s, content_type=%s, body_length=%s, title=%r)",
+                response.url,
+                response.status_code,
+                response.headers.get("Content-Type", ""),
+                len(response.text),
+                page_title,
             )
-            if title_match:
-                ref_title = title_match.group(1).strip()
-                logging.info("Using Bible.com HTML title fallback for reference: %s", ref_title)
+        except requests.RequestException as error:
+            logging.warning("Bible.com request failed for %s: %s", url, error)
 
-        if not ref_title:
-            logging.warning("Could not find referenceTitle in data.")
-            return None
-            
-        # Example ref_title: "Matthew 9:37-38"
-        match = re.match(r'^([\d\sA-Za-z]+)\s+([\d:,-]+)$', ref_title)
-        if not match:
-            logging.warning(f"Could not parse reference format: {ref_title}")
-            return None
-            
-        eng_book = match.group(1).strip()
-        verses_ref = match.group(2).strip()
-        
-        chi_book = book_mapping.get(eng_book, eng_book)
-        api_query = f"{chi_book} {verses_ref}"
-        
-        # Fetch actual text from bible-api.com
-        api_url = f"https://bible-api.com/{api_query}?translation=cuv"
-        api_res = requests.get(api_url, timeout=10)
-        api_res.raise_for_status()
-        
-        api_data = api_res.json()
-        verse_text = api_data.get('text', '').strip()
-        
-        # Format Reference: change 1:7-8 to 1章7-8節
-        if ':' in verses_ref:
-            ch, vs = verses_ref.split(':', 1)
-            formatted_ref = f"{chi_book} {ch}章{vs}節"
-        else:
-            formatted_ref = f"{chi_book} {verses_ref}"
-            
-        # Extract Image URL
-        image_url = None
-        images = data.get('images', [])
-        if images and len(images) > 0:
-            renditions = images[0].get('renditions', [])
-            if renditions:
-                image_url = renditions[-1].get('url')
-                if image_url and image_url.startswith('//'):
-                    image_url = 'https:' + image_url
-
-        logging.info(f"Successfully fetched verse: {formatted_ref}")
-        
-        return {
-            "text": verse_text,
-            "reference": formatted_ref,
-            "image_url": image_url
-        }
-        
-    except Exception as e:
-        logging.error(f"Error fetching daily verse: {e}")
+    if not ref_title:
+        logging.error("Could not find today's Bible reference after all fallbacks.")
         return None
 
+    match = re.fullmatch(r"([\d\sA-Za-z]+)\s+([\d:,-]+)", ref_title)
+    if not match:
+        logging.warning("Could not parse reference format: %s", ref_title)
+        return None
+
+    eng_book = match.group(1).strip()
+    verses_ref = match.group(2).strip()
+    chi_book = book_mapping.get(eng_book, eng_book)
+    api_query = f"{chi_book} {verses_ref}"
+
+    try:
+        api_url = f"https://bible-api.com/{quote(api_query)}?translation=cuv"
+        api_response = requests.get(api_url, timeout=15)
+        api_response.raise_for_status()
+        api_data = api_response.json()
+    except (requests.RequestException, ValueError) as error:
+        logging.error("Error fetching CUV verse text: %s", error)
+        return None
+
+    verse_text = api_data.get("text", "").strip()
+    if not verse_text:
+        logging.error("Bible API returned an empty verse for %s", api_query)
+        return None
+
+    chapter, verses = verses_ref.split(":", 1)
+    formatted_ref = f"{chi_book} {chapter}章{verses}節"
+
+    image_url = None
+    images = data.get("images", []) if isinstance(data, dict) else []
+    if images:
+        renditions = images[0].get("renditions", [])
+        if renditions:
+            image_url = renditions[-1].get("url")
+            if image_url and image_url.startswith("//"):
+                image_url = "https:" + image_url
+
+    logging.info("Successfully fetched verse: %s", formatted_ref)
+    return {
+        "text": verse_text,
+        "reference": formatted_ref,
+        "image_url": image_url,
+    }
+
+
 if __name__ == "__main__":
-    # Manual test
-    data = get_daily_verse()
-    if data:
+    result = get_daily_verse()
+    if result:
         print("Fetched Data:")
-        print(f"Text: {data['text']}")
-        print(f"Reference: {data['reference']}")
-        print(f"Image: {data['image_url']}")
+        print(f"Text: {result['text']}")
+        print(f"Reference: {result['reference']}")
+        print(f"Image: {result['image_url']}")
     else:
         print("Failed to fetch data.")
