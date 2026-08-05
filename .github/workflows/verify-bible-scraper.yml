@@ -1,0 +1,51 @@
+name: Verify Bible Scraper
+
+on:
+  push:
+    branches:
+      - verify/bible-scraper-20260805
+    paths:
+      - scraper.py
+      - tests/test_scraper.py
+      - .github/workflows/verify-bible-scraper.yml
+  workflow_dispatch:
+
+jobs:
+  verify-live-scraper:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout verification branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Compile scraper
+        run: python -m py_compile scraper.py
+
+      - name: Run scraper unit tests
+        run: python -m unittest -v tests/test_scraper.py
+
+      - name: Run live Bible.com and bible-api.com proof
+        run: |
+          python - <<'PY'
+          from scraper import get_daily_verse
+
+          result = get_daily_verse()
+          assert result is not None, "Live scraper returned None"
+          assert result.get("reference"), "Missing formatted reference"
+          assert result.get("text"), "Missing CUV verse text"
+          assert "章" in result["reference"] and "節" in result["reference"], result
+
+          print("LIVE_PROOF_OK=true")
+          print(f"LIVE_REFERENCE={result['reference']}")
+          print(f"LIVE_TEXT_LENGTH={len(result['text'])}")
+          print(f"LIVE_TEXT_PREVIEW={result['text'][:80].replace(chr(10), ' ')}")
+          PY
