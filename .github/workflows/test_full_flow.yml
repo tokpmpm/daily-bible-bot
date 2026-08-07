@@ -12,13 +12,21 @@ on:
       - agent/use-youversion-compare-cunp
     paths:
       - .github/workflows/test_full_flow.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/test_full_flow.yml
 
 permissions:
   contents: read
 
 jobs:
   full-flow-test:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[tg-test]')
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && github.head_ref == 'agent/use-youversion-compare-cunp') ||
+      contains(github.event.head_commit.message, '[tg-test]')
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
