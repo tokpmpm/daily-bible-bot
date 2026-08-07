@@ -1,3 +1,4 @@
+import html
 import json
 import logging
 import re
@@ -73,12 +74,12 @@ def _find_osis_reference(soup: BeautifulSoup) -> str:
     return ""
 
 
-def _extract_reference_and_data(html: str):
+def _extract_reference_and_data(html_text: str):
     """Extract the English reference, page data, source, and OSIS reference."""
     data = {}
     next_data_match = re.search(
         r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>',
-        html,
+        html_text,
         re.S,
     )
     if next_data_match:
@@ -89,12 +90,12 @@ def _extract_reference_and_data(html: str):
                 reference_title = reference_title.get("title", "")
             reference = _find_reference(str(reference_title))
             if reference:
-                soup = BeautifulSoup(html, "html.parser")
+                soup = BeautifulSoup(html_text, "html.parser")
                 return reference, data, "__NEXT_DATA__", _find_osis_reference(soup)
         except (TypeError, ValueError, json.JSONDecodeError) as error:
             logging.warning("Could not parse Bible.com __NEXT_DATA__: %s", error)
 
-    soup = BeautifulSoup(html, "html.parser")
+    soup = BeautifulSoup(html_text, "html.parser")
     osis = _find_osis_reference(soup)
 
     if soup.title:
@@ -141,8 +142,51 @@ def _find_cunp_url(compare_html: str, compare_url: str) -> str:
 
 
 def _direct_cunp_url(osis_reference: str) -> str:
-    """Build the stable YouVersion CUNP page URL using version id 46."""
-    return f"https://www.bible.com/zh-TW/bible/46/{osis_reference}.CUNP"
+    """Build the YouVersion CUNP-神 URL using version id 46."""
+    return f"https://www.bible.com/zh-TW/bible/46/{osis_reference}.CUNP-%E7%A5%9E"
+
+
+def _has_chinese_text(value: str, minimum: int = 8) -> bool:
+    return sum("\u4e00" <= char <= "\u9fff" for char in value) >= minimum
+
+
+def _clean_cunp_candidate(value: str) -> str:
+    value = html.unescape(value or "")
+    value = re.sub(r"\s+", " ", value).strip()
+    if not value:
+        return ""
+
+    if " - " in value and ("CUNP" in value or "和合本" in value):
+        value = value.split(" - ", 1)[1]
+
+    value = re.sub(r"^.*?CUNP(?:-神)?\s*", "", value, flags=re.I)
+    value = re.sub(r"^\s*\([^)]*新標點和合本[^)]*\)\s*", "", value)
+    value = re.split(
+        r"\s*(?:\|\s*YouVersion|分享|閱讀\s|聆聽\s|對照全部譯本)",
+        value,
+        maxsplit=1,
+    )[0]
+    value = re.sub(r"^\d+\s*", "", value).strip(" -|\n\t")
+    return value if _has_chinese_text(value) else ""
+
+
+def _extract_cunp_from_compare_page(compare_html: str) -> str:
+    soup = BeautifulSoup(compare_html, "html.parser")
+    page_text = re.sub(r"\s+", " ", soup.get_text(" ", strip=True))
+
+    for match in re.finditer(r"CUNP(?:-神)?", page_text, re.I):
+        segment = page_text[match.end():]
+        segment = re.sub(r"^\s*\([^)]*\)\s*", "", segment)
+        segment = re.split(
+            r"\s+(?:分享|閱讀|RCUV|CNV|CCB|和合本修訂版|新譯本|當代譯本)",
+            segment,
+            maxsplit=1,
+        )[0]
+        candidate = _clean_cunp_candidate(segment)
+        if candidate:
+            return candidate
+
+    return ""
 
 
 def _extract_cunp_text(verse_html: str) -> str:
@@ -157,16 +201,31 @@ def _extract_cunp_text(verse_html: str) -> str:
     if fragments:
         return " ".join(fragments).strip()
 
+    for attrs in (
+        {"property": "og:description"},
+        {"name": "description"},
+        {"name": "twitter:description"},
+    ):
+        meta = soup.find("meta", attrs=attrs)
+        if meta:
+            candidate = _clean_cunp_candidate(meta.get("content", ""))
+            if candidate:
+                return candidate
+
+    if soup.title:
+        candidate = _clean_cunp_candidate(soup.title.get_text(" ", strip=True))
+        if candidate:
+            return candidate
+
     for selector in (
         "[class*='ChapterContent_content']",
         "[class*='BibleReader']",
         "main",
     ):
         for element in soup.select(selector):
-            text = element.get_text(" ", strip=True)
-            text = re.sub(r"\s+", " ", text)
-            if len(text) >= 8 and any("\u4e00" <= char <= "\u9fff" for char in text):
-                return text
+            candidate = _clean_cunp_candidate(element.get_text(" ", strip=True))
+            if candidate:
+                return candidate
 
     return ""
 
@@ -178,6 +237,12 @@ def _fetch_cunp_from_youversion(osis_reference: str) -> str:
     try:
         compare_response = requests.get(compare_url, headers=HEADERS, timeout=15)
         compare_response.raise_for_status()
+
+        compare_text = _extract_cunp_from_compare_page(compare_response.text)
+        if compare_text:
+            logging.info("Extracted CUNP verse directly from Bible.com comparison page.")
+            return compare_text
+
         cunp_url = _find_cunp_url(compare_response.text, compare_response.url)
     except requests.RequestException as error:
         logging.warning("Bible.com comparison page request failed: %s", error)
