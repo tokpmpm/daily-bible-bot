@@ -11,11 +11,15 @@ on:
     branches:
       - agent/use-youversion-compare-cunp
     paths:
+      - scraper.py
+      - tests/test_scraper.py
       - .github/workflows/test_full_flow.yml
   pull_request:
     branches:
       - main
     paths:
+      - scraper.py
+      - tests/test_scraper.py
       - .github/workflows/test_full_flow.yml
 
 permissions:
