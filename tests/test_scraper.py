@@ -25,6 +25,15 @@ COMPARE_HTML = """
 </body></html>
 """
 
+COMPARE_WITH_TEXT_HTML = """
+<html><body><main>
+  <section>約翰一書 4:16 CUNP-神 (新標點和合本, 神版)
+  神愛我們的心，我們也知道也信。 神就是愛；住在愛裏面的，就是住在神裏面，神也住在他裏面。
+  分享 閱讀 約翰一書 4</section>
+  <section>約翰一書 4:16 RCUV 和合本修訂版 其他譯文</section>
+</main></body></html>
+"""
+
 COMPARE_WITHOUT_CUNP_HTML = """
 <html><body><main>比較聖經譯本</main></body></html>
 """
@@ -33,6 +42,13 @@ CUNP_HTML = """
 <html><body><main>
   <span data-usfm="1JN.4.16">16 神愛我們的心，我們也知道也信。</span>
 </main></body></html>
+"""
+
+CUNP_META_HTML = """
+<html><head>
+  <title>約翰一書 4:16 (CUNP-神) - 神愛我們的心，我們也知道也信。 神就是愛；住在愛裏面的，就是住在神裏面 | YouVersion</title>
+  <meta property="og:description" content="神愛我們的心，我們也知道也信。 神就是愛；住在愛裏面的，就是住在神裏面，神也住在他裏面。">
+</head><body></body></html>
 """
 
 
@@ -81,13 +97,25 @@ class ScraperTests(unittest.TestCase):
     def test_builds_direct_cunp_url(self):
         self.assertEqual(
             scraper._direct_cunp_url("1JN.4.16"),
-            "https://www.bible.com/zh-TW/bible/46/1JN.4.16.CUNP",
+            "https://www.bible.com/zh-TW/bible/46/1JN.4.16.CUNP-%E7%A5%9E",
         )
 
     def test_extracts_cunp_text(self):
         self.assertEqual(
             scraper._extract_cunp_text(CUNP_HTML),
             "神愛我們的心，我們也知道也信。",
+        )
+
+    def test_extracts_cunp_text_from_meta_description(self):
+        self.assertEqual(
+            scraper._extract_cunp_text(CUNP_META_HTML),
+            "神愛我們的心，我們也知道也信。 神就是愛；住在愛裏面的，就是住在神裏面，神也住在他裏面。",
+        )
+
+    def test_extracts_cunp_text_from_compare_content(self):
+        self.assertEqual(
+            scraper._extract_cunp_from_compare_page(COMPARE_WITH_TEXT_HTML),
+            "神愛我們的心，我們也知道也信。 神就是愛；住在愛裏面的，就是住在神裏面，神也住在他裏面。",
         )
 
     @patch("scraper.requests.get")
@@ -121,6 +149,26 @@ class ScraperTests(unittest.TestCase):
         self.assertIn("/bible/compare/1JN.4.16", mock_get.call_args_list[1].args[0])
 
     @patch("scraper.requests.get")
+    def test_returns_compare_page_cunp_without_requesting_direct_page(self, mock_get):
+        daily = FakeResponse(
+            text=CURRENT_BIBLE_COM_HTML,
+            url="https://www.bible.com/zh-TW/verse-of-the-day?day=219",
+        )
+        compare = FakeResponse(
+            text=COMPARE_WITH_TEXT_HTML,
+            url="https://www.bible.com/zh-TW/bible/compare/1JN.4.16",
+        )
+        mock_get.side_effect = [daily, compare]
+
+        result = scraper.get_daily_verse(
+            now=datetime(2026, 8, 7, 10, 0, tzinfo=ZoneInfo("Asia/Taipei"))
+        )
+
+        self.assertEqual(result["reference"], "約翰一書 4章16節")
+        self.assertIn("神就是愛", result["text"])
+        self.assertEqual(len(mock_get.call_args_list), 2)
+
+    @patch("scraper.requests.get")
     def test_uses_direct_cunp_url_when_compare_has_no_link(self, mock_get):
         daily = FakeResponse(
             text=CURRENT_BIBLE_COM_HTML,
@@ -131,8 +179,8 @@ class ScraperTests(unittest.TestCase):
             url="https://www.bible.com/zh-TW/bible/compare/1JN.4.16",
         )
         cunp = FakeResponse(
-            text=CUNP_HTML,
-            url="https://www.bible.com/zh-TW/bible/46/1JN.4.16.CUNP",
+            text=CUNP_META_HTML,
+            url="https://www.bible.com/zh-TW/bible/46/1JN.4.16.CUNP-%E7%A5%9E",
         )
         mock_get.side_effect = [daily, compare, cunp]
 
@@ -141,11 +189,11 @@ class ScraperTests(unittest.TestCase):
         )
 
         self.assertEqual(result["reference"], "約翰一書 4章16節")
-        self.assertEqual(result["text"], "神愛我們的心，我們也知道也信。")
+        self.assertIn("神就是愛", result["text"])
         direct_url = mock_get.call_args_list[2].args[0]
         self.assertEqual(
             direct_url,
-            "https://www.bible.com/zh-TW/bible/46/1JN.4.16.CUNP",
+            "https://www.bible.com/zh-TW/bible/46/1JN.4.16.CUNP-%E7%A5%9E",
         )
 
     @patch("scraper.requests.get")
