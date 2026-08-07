@@ -11,22 +11,24 @@ import scraper
 
 
 CURRENT_BIBLE_COM_HTML = """
-<!doctype html>
 <html>
   <head><title>Verse of the Day | Bible App</title></head>
   <body>
-    <main>
-      <h1>Verse of the Day</h1>
-      <p>August 5, 2026</p>
-      <a href="/bible/111/LUK.16.10.NIV">
-        <span>Luke 16:10 (NIV)</span>
-      </a>
-      <section>
-        <a href="/bible/111/JAS.3.13.NIV">James 3:13 (NIV)</a>
-      </section>
-    </main>
+    <a href="/bible/111/1JN.4.16.NIV"><span>1 John 4:16 (NIV)</span></a>
   </body>
 </html>
+"""
+
+COMPARE_HTML = """
+<html><body>
+  <a href="/zh-TW/bible/46/1JN.4.16.CUNP-%E7%A5%9E">新標點和合本，神版</a>
+</body></html>
+"""
+
+CUNP_HTML = """
+<html><body><main>
+  <span data-usfm="1JN.4.16">16 神愛我們的心，我們也知道也信。</span>
+</main></body></html>
 """
 
 
@@ -49,92 +51,87 @@ class FakeResponse:
 
 
 class ScraperTests(unittest.TestCase):
-    def test_extracts_reference_from_current_visible_content(self):
-        reference, data, source = scraper._extract_reference_and_data(CURRENT_BIBLE_COM_HTML)
-        self.assertEqual(reference, "Luke 16:10")
+    def test_extracts_reference_and_osis(self):
+        reference, data, source, osis = scraper._extract_reference_and_data(
+            CURRENT_BIBLE_COM_HTML
+        )
+        self.assertEqual(reference, "1 John 4:16")
         self.assertEqual(data, {})
         self.assertEqual(source, "visible-content")
+        self.assertEqual(osis, "1JN.4.16")
 
-    def test_keeps_legacy_next_data_compatibility(self):
-        html = """
-        <script id="__NEXT_DATA__" type="application/json">
-        {"props":{"pageProps":{"referenceTitle":{"title":"Matthew 9:37-38"}}}}
-        </script>
-        """
-        reference, _, source = scraper._extract_reference_and_data(html)
-        self.assertEqual(reference, "Matthew 9:37-38")
-        self.assertEqual(source, "__NEXT_DATA__")
-
-    def test_uses_taipei_day_of_year(self):
-        now = datetime(2026, 8, 5, 10, 0, tzinfo=ZoneInfo("Asia/Taipei"))
+    def test_uses_taipei_day_of_year_and_prefers_chinese_page(self):
+        now = datetime(2026, 8, 7, 10, 0, tzinfo=ZoneInfo("Asia/Taipei"))
         self.assertEqual(
             scraper._daily_verse_urls(now)[0],
-            "https://www.bible.com/verse-of-the-day?day=217",
+            "https://www.bible.com/zh-TW/verse-of-the-day?day=219",
+        )
+
+    def test_finds_cunp_link_from_compare_page(self):
+        url = scraper._find_cunp_url(
+            COMPARE_HTML,
+            "https://www.bible.com/zh-TW/bible/compare/1JN.4.16",
+        )
+        self.assertIn("/zh-TW/bible/46/1JN.4.16.CUNP-", url)
+
+    def test_extracts_cunp_text(self):
+        self.assertEqual(
+            scraper._extract_cunp_text(CUNP_HTML),
+            "神愛我們的心，我們也知道也信。",
         )
 
     @patch("scraper.requests.get")
-    def test_full_flow_returns_traditional_chinese_reference(self, mock_get):
-        bible_page = FakeResponse(
+    def test_full_flow_prefers_bible_com_cunp(self, mock_get):
+        daily = FakeResponse(
             text=CURRENT_BIBLE_COM_HTML,
-            url="https://www.bible.com/verse-of-the-day?day=217",
+            url="https://www.bible.com/zh-TW/verse-of-the-day?day=219",
         )
-        bible_api = FakeResponse(
-            json_data={"text": "測試經文內容"},
-            url="https://bible-api.com/test",
+        compare = FakeResponse(
+            text=COMPARE_HTML,
+            url="https://www.bible.com/zh-TW/bible/compare/1JN.4.16",
         )
-        bible_api.headers = {"Content-Type": "application/json"}
-        mock_get.side_effect = [bible_page, bible_api]
+        cunp = FakeResponse(
+            text=CUNP_HTML,
+            url="https://www.bible.com/zh-TW/bible/46/1JN.4.16.CUNP-%E7%A5%9E",
+        )
+        mock_get.side_effect = [daily, compare, cunp]
 
-        now = datetime(2026, 8, 5, 10, 0, tzinfo=ZoneInfo("Asia/Taipei"))
+        now = datetime(2026, 8, 7, 10, 0, tzinfo=ZoneInfo("Asia/Taipei"))
         result = scraper.get_daily_verse(now=now)
 
         self.assertEqual(
             result,
             {
-                "text": "測試經文內容",
-                "reference": "路加福音 16章10節",
+                "text": "神愛我們的心，我們也知道也信。",
+                "reference": "約翰一書 4章16節",
                 "image_url": None,
             },
         )
-        self.assertEqual(
-            mock_get.call_args_list[0].args[0],
-            "https://www.bible.com/verse-of-the-day?day=217",
-        )
-        self.assertIn("translation=cuv", mock_get.call_args_list[1].args[0])
-
-    def test_parses_multiple_current_reference_formats(self):
-        cases = {
-            "1 John 4:16 (NIV)": "1 John 4:16",
-            "Psalms 34:19 (NIV)": "Psalms 34:19",
-            "Ephesians 3:20-21 (NIV)": "Ephesians 3:20-21",
-            "1 Corinthians 13:4 (NIV)": "1 Corinthians 13:4",
-        }
-        for source_text, expected in cases.items():
-            with self.subTest(source_text=source_text):
-                self.assertEqual(scraper._find_reference(source_text), expected)
+        self.assertEqual(len(mock_get.call_args_list), 3)
+        self.assertIn("/bible/compare/1JN.4.16", mock_get.call_args_list[1].args[0])
 
     @patch("scraper.requests.get")
-    def test_tries_localized_fallback_when_primary_page_has_no_reference(self, mock_get):
-        empty_page = FakeResponse(
-            text="<html><head><title>Verse of the Day</title></head><body></body></html>",
-            url="https://www.bible.com/verse-of-the-day?day=217",
-        )
-        localized_page = FakeResponse(
+    def test_falls_back_to_english_query_when_cunp_fails(self, mock_get):
+        daily = FakeResponse(
             text=CURRENT_BIBLE_COM_HTML,
-            url="https://www.bible.com/zh-TW/verse-of-the-day?day=217",
+            url="https://www.bible.com/zh-TW/verse-of-the-day?day=219",
         )
-        bible_api = FakeResponse(
-            json_data={"text": "測試經文內容"},
-            url="https://bible-api.com/test",
+        compare_failure = FakeResponse(status=503)
+        api = FakeResponse(
+            json_data={"text": "神愛我們的心，我們也知道也信。"},
+            url="https://bible-api.com/1%20John%204%3A16?translation=cuv",
         )
-        bible_api.headers = {"Content-Type": "application/json"}
-        mock_get.side_effect = [empty_page, localized_page, bible_api]
+        api.headers = {"Content-Type": "application/json"}
+        mock_get.side_effect = [daily, compare_failure, api]
 
-        now = datetime(2026, 8, 5, 10, 0, tzinfo=ZoneInfo("Asia/Taipei"))
-        result = scraper.get_daily_verse(now=now)
+        result = scraper.get_daily_verse(
+            now=datetime(2026, 8, 7, 10, 0, tzinfo=ZoneInfo("Asia/Taipei"))
+        )
 
-        self.assertEqual(result["reference"], "路加福音 16章10節")
-        self.assertEqual(len(mock_get.call_args_list), 3)
+        self.assertEqual(result["reference"], "約翰一書 4章16節")
+        fallback_url = mock_get.call_args_list[2].args[0]
+        self.assertIn("1%20John%204%3A16", fallback_url)
+        self.assertNotIn("%E7%B4%84%E7%BF%B0", fallback_url)
 
 
 if __name__ == "__main__":
