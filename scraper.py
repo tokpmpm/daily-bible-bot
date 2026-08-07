@@ -1,15 +1,15 @@
-import requests
+import html
 import json
-import re
 import logging
+import re
 from datetime import datetime
-from urllib.parse import quote
+from urllib.parse import quote, urljoin
 from zoneinfo import ZoneInfo
 
+import requests
 from bs4 import BeautifulSoup
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 book_mapping = {
     "Genesis": "創世記", "Exodus": "出埃及記", "Leviticus": "利未記", "Numbers": "民數記", "Deuteronomy": "申命記",
@@ -25,19 +25,29 @@ book_mapping = {
     "Ephesians": "以弗所書", "Philippians": "腓立比書", "Colossians": "歌羅西書", "1 Thessalonians": "帖撒羅尼迦前書",
     "2 Thessalonians": "帖撒羅尼迦後書", "1 Timothy": "提摩太前書", "2 Timothy": "提摩太後書", "Titus": "提多書",
     "Philemon": "腓利門書", "Hebrews": "希伯來書", "James": "雅各書", "1 Peter": "彼得前書", "2 Peter": "彼得後書",
-    "1 John": "約翰一書", "2 John": "約翰二書", "3 John": "約翰三書", "Jude": "猶大書", "Revelation": "啟示錄"
+    "1 John": "約翰一書", "2 John": "約翰二書", "3 John": "約翰三書", "Jude": "猶大書", "Revelation": "啟示錄",
 }
 
 _BOOK_LOOKUP = {book.lower(): book for book in book_mapping}
-_BOOK_PATTERN = "|".join(
-    re.escape(book) for book in sorted(book_mapping, key=len, reverse=True)
-)
+_BOOK_PATTERN = "|".join(re.escape(book) for book in sorted(book_mapping, key=len, reverse=True))
 _REFERENCE_PATTERN = re.compile(
     rf"(?<![A-Za-z0-9])(?P<book>{_BOOK_PATTERN})\s+"
     rf"(?P<verses>\d+:\d+(?:\s*[-–—,]\s*\d+)*)"
     rf"\s*(?:\([^)]+\))?",
     re.IGNORECASE,
 )
+_OSIS_PATTERN = re.compile(r"/(?:bible|compare)/(?:\d+/)?(?P<osis>[1-3A-Z]{3}\.\d+\.\d+(?:-\d+)?)", re.I)
+_CUNP_LINK_PATTERN = re.compile(r"/zh-TW/bible/\d+/[^\"']*CUNP", re.I)
+
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.8",
+    "Cache-Control": "no-cache",
+}
 
 
 def _normalize_reference(book: str, verses: str) -> str:
@@ -56,14 +66,20 @@ def _find_reference(text: str) -> str:
     return _normalize_reference(match.group("book"), match.group("verses"))
 
 
-def _extract_reference_and_data(html: str):
-    """Extract a Bible reference from both old and current Bible.com markup."""
-    data = {}
+def _find_osis_reference(soup: BeautifulSoup) -> str:
+    for element in soup.find_all(href=True):
+        match = _OSIS_PATTERN.search(element.get("href", ""))
+        if match:
+            return match.group("osis").upper()
+    return ""
 
-    # Legacy Next.js payload used by the original implementation.
+
+def _extract_reference_and_data(html_text: str):
+    """Extract the English reference, page data, source, and OSIS reference."""
+    data = {}
     next_data_match = re.search(
         r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>',
-        html,
+        html_text,
         re.S,
     )
     if next_data_match:
@@ -74,91 +90,207 @@ def _extract_reference_and_data(html: str):
                 reference_title = reference_title.get("title", "")
             reference = _find_reference(str(reference_title))
             if reference:
-                return reference, data, "__NEXT_DATA__"
+                soup = BeautifulSoup(html_text, "html.parser")
+                return reference, data, "__NEXT_DATA__", _find_osis_reference(soup)
         except (TypeError, ValueError, json.JSONDecodeError) as error:
             logging.warning("Could not parse Bible.com __NEXT_DATA__: %s", error)
 
-    soup = BeautifulSoup(html, "html.parser")
+    soup = BeautifulSoup(html_text, "html.parser")
+    osis = _find_osis_reference(soup)
 
-    # Some versions expose the reference in the document title.
     if soup.title:
         reference = _find_reference(soup.title.get_text(" ", strip=True))
         if reference:
-            return reference, data, "html-title"
+            return reference, data, "html-title", osis
 
-    # Current Bible.com markup renders text such as "Luke 16:10 (NIV)"
-    # inside a normal link. Search likely content elements before the whole page
-    # so the main verse is selected before the previous-days list.
     for element in soup.find_all(["a", "span", "p", "h1", "h2", "h3"]):
         reference = _find_reference(element.get_text(" ", strip=True))
         if reference:
-            return reference, data, "visible-content"
+            local_osis = ""
+            if element.name == "a":
+                match = _OSIS_PATTERN.search(element.get("href", ""))
+                local_osis = match.group("osis").upper() if match else ""
+            return reference, data, "visible-content", local_osis or osis
 
     reference = _find_reference(soup.get_text(" ", strip=True))
     if reference:
-        return reference, data, "page-text"
+        return reference, data, "page-text", osis
 
-    return "", data, "not-found"
+    return "", data, "not-found", osis
 
 
 def _daily_verse_urls(now=None):
-    """Build deterministic Bible.com URLs using the user's Taiwan date."""
     taipei_now = now or datetime.now(ZoneInfo("Asia/Taipei"))
     day_of_year = taipei_now.timetuple().tm_yday
     return [
-        f"https://www.bible.com/verse-of-the-day?day={day_of_year}",
         f"https://www.bible.com/zh-TW/verse-of-the-day?day={day_of_year}",
-        "https://www.bible.com/verse-of-the-day",
+        f"https://www.bible.com/verse-of-the-day?day={day_of_year}",
+        "https://www.bible.com/zh-TW/verse-of-the-day",
     ]
 
 
+def _find_cunp_url(compare_html: str, compare_url: str) -> str:
+    soup = BeautifulSoup(compare_html, "html.parser")
+    for link in soup.find_all("a", href=True):
+        href = link.get("href", "")
+        label = link.get_text(" ", strip=True)
+        if "CUNP" in href.upper() or "新標點和合本" in label or "和合本" in label:
+            return urljoin(compare_url, href)
+
+    match = _CUNP_LINK_PATTERN.search(compare_html)
+    return urljoin(compare_url, match.group(0)) if match else ""
+
+
+def _direct_cunp_url(osis_reference: str) -> str:
+    """Build the YouVersion CUNP-神 URL using version id 46."""
+    return f"https://www.bible.com/zh-TW/bible/46/{osis_reference}.CUNP-%E7%A5%9E"
+
+
+def _has_chinese_text(value: str, minimum: int = 8) -> bool:
+    return sum("\u4e00" <= char <= "\u9fff" for char in value) >= minimum
+
+
+def _clean_cunp_candidate(value: str) -> str:
+    value = html.unescape(value or "")
+    value = re.sub(r"\s+", " ", value).strip()
+    if not value:
+        return ""
+
+    if " - " in value and ("CUNP" in value or "和合本" in value):
+        value = value.split(" - ", 1)[1]
+
+    value = re.sub(r"^.*?CUNP(?:-神)?\s*", "", value, flags=re.I)
+    value = re.sub(r"^\s*\([^)]*新標點和合本[^)]*\)\s*", "", value)
+    value = re.split(
+        r"\s*(?:\|\s*YouVersion|分享|閱讀\s|聆聽\s|對照全部譯本)",
+        value,
+        maxsplit=1,
+    )[0]
+    value = re.sub(r"^\d+\s*", "", value).strip(" -|\n\t")
+    return value if _has_chinese_text(value) else ""
+
+
+def _extract_cunp_from_compare_page(compare_html: str) -> str:
+    soup = BeautifulSoup(compare_html, "html.parser")
+    page_text = re.sub(r"\s+", " ", soup.get_text(" ", strip=True))
+
+    for match in re.finditer(r"CUNP(?:-神)?", page_text, re.I):
+        segment = page_text[match.end():]
+        segment = re.sub(r"^\s*\([^)]*\)\s*", "", segment)
+        segment = re.split(
+            r"\s+(?:分享|閱讀|RCUV|CNV|CCB|和合本修訂版|新譯本|當代譯本)",
+            segment,
+            maxsplit=1,
+        )[0]
+        candidate = _clean_cunp_candidate(segment)
+        if candidate:
+            return candidate
+
+    return ""
+
+
+def _extract_cunp_text(verse_html: str) -> str:
+    soup = BeautifulSoup(verse_html, "html.parser")
+
+    fragments = []
+    for element in soup.select("[data-usfm]"):
+        text = element.get_text(" ", strip=True)
+        text = re.sub(r"^\d+\s*", "", text)
+        if text and text not in fragments:
+            fragments.append(text)
+    if fragments:
+        return " ".join(fragments).strip()
+
+    for attrs in (
+        {"property": "og:description"},
+        {"name": "description"},
+        {"name": "twitter:description"},
+    ):
+        meta = soup.find("meta", attrs=attrs)
+        if meta:
+            candidate = _clean_cunp_candidate(meta.get("content", ""))
+            if candidate:
+                return candidate
+
+    if soup.title:
+        candidate = _clean_cunp_candidate(soup.title.get_text(" ", strip=True))
+        if candidate:
+            return candidate
+
+    for selector in (
+        "[class*='ChapterContent_content']",
+        "[class*='BibleReader']",
+        "main",
+    ):
+        for element in soup.select(selector):
+            candidate = _clean_cunp_candidate(element.get_text(" ", strip=True))
+            if candidate:
+                return candidate
+
+    return ""
+
+
+def _fetch_cunp_from_youversion(osis_reference: str) -> str:
+    compare_url = f"https://www.bible.com/zh-TW/bible/compare/{osis_reference}"
+    cunp_url = ""
+
+    try:
+        compare_response = requests.get(compare_url, headers=HEADERS, timeout=15)
+        compare_response.raise_for_status()
+
+        compare_text = _extract_cunp_from_compare_page(compare_response.text)
+        if compare_text:
+            logging.info("Extracted CUNP verse directly from Bible.com comparison page.")
+            return compare_text
+
+        cunp_url = _find_cunp_url(compare_response.text, compare_response.url)
+    except requests.RequestException as error:
+        logging.warning("Bible.com comparison page request failed: %s", error)
+
+    if not cunp_url:
+        cunp_url = _direct_cunp_url(osis_reference)
+        logging.info("CUNP link absent on comparison page; using direct Bible.com CUNP URL.")
+
+    verse_response = requests.get(cunp_url, headers=HEADERS, timeout=15)
+    verse_response.raise_for_status()
+    verse_text = _extract_cunp_text(verse_response.text)
+    if not verse_text:
+        raise ValueError("CUNP verse text was empty on Bible.com")
+    return verse_text
+
+
+def _fetch_cuv_fallback(eng_book: str, verses_ref: str) -> str:
+    query = f"{eng_book} {verses_ref}"
+    api_url = f"https://bible-api.com/{quote(query)}?translation=cuv"
+    response = requests.get(api_url, timeout=15)
+    response.raise_for_status()
+    data = response.json()
+    text = data.get("text", "").strip()
+    if not text:
+        raise ValueError(f"Bible API returned an empty verse for {query}")
+    return text
+
+
 def get_daily_verse(now=None):
-    """
-    Fetch the Verse of the Day reference from Bible.com and retrieve the
-    Traditional Chinese (CUV) text via bible-api.com.
-
-    The optional ``now`` argument exists for deterministic tests; production
-    callers can continue calling this function without arguments.
-    """
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/150.0.0.0 Safari/537.36"
-        ),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9,zh-TW;q=0.8",
-        "Cache-Control": "no-cache",
-    }
-
+    """Fetch today's reference, prefer Bible.com CUNP, then fall back to bible-api.com."""
     ref_title = ""
     data = {}
+    osis_reference = ""
 
     for url in _daily_verse_urls(now):
         try:
-            response = requests.get(url, headers=headers, timeout=15)
+            response = requests.get(url, headers=HEADERS, timeout=15)
             response.raise_for_status()
-            ref_title, data, source = _extract_reference_and_data(response.text)
+            ref_title, data, source, osis_reference = _extract_reference_and_data(response.text)
             if ref_title:
                 logging.info(
-                    "Bible.com reference extracted via %s from %s: %s",
+                    "Bible.com reference extracted via %s from %s: %s (osis=%s)",
                     source,
                     response.url,
                     ref_title,
+                    osis_reference or "not-found",
                 )
                 break
-
-            soup = BeautifulSoup(response.text, "html.parser")
-            page_title = soup.title.get_text(" ", strip=True) if soup.title else ""
-            logging.warning(
-                "No Bible reference found from %s "
-                "(status=%s, content_type=%s, body_length=%s, title=%r)",
-                response.url,
-                response.status_code,
-                response.headers.get("Content-Type", ""),
-                len(response.text),
-                page_title,
-            )
         except requests.RequestException as error:
             logging.warning("Bible.com request failed for %s: %s", url, error)
 
@@ -168,27 +300,28 @@ def get_daily_verse(now=None):
 
     match = re.fullmatch(r"([\d\sA-Za-z]+)\s+([\d:,-]+)", ref_title)
     if not match:
-        logging.warning("Could not parse reference format: %s", ref_title)
+        logging.error("Could not parse reference format: %s", ref_title)
         return None
 
     eng_book = match.group(1).strip()
     verses_ref = match.group(2).strip()
     chi_book = book_mapping.get(eng_book, eng_book)
-    api_query = f"{chi_book} {verses_ref}"
 
-    try:
-        api_url = f"https://bible-api.com/{quote(api_query)}?translation=cuv"
-        api_response = requests.get(api_url, timeout=15)
-        api_response.raise_for_status()
-        api_data = api_response.json()
-    except (requests.RequestException, ValueError) as error:
-        logging.error("Error fetching CUV verse text: %s", error)
-        return None
+    verse_text = ""
+    if osis_reference:
+        try:
+            verse_text = _fetch_cunp_from_youversion(osis_reference)
+            logging.info("Fetched CUNP verse from Bible.com.")
+        except (requests.RequestException, ValueError) as error:
+            logging.warning("Bible.com CUNP lookup failed; using CUV fallback: %s", error)
 
-    verse_text = api_data.get("text", "").strip()
     if not verse_text:
-        logging.error("Bible API returned an empty verse for %s", api_query)
-        return None
+        try:
+            verse_text = _fetch_cuv_fallback(eng_book, verses_ref)
+            logging.info("Fetched CUV verse from bible-api.com fallback.")
+        except (requests.RequestException, ValueError) as error:
+            logging.error("All Chinese verse sources failed: %s", error)
+            return None
 
     chapter, verses = verses_ref.split(":", 1)
     formatted_ref = f"{chi_book} {chapter}章{verses}節"
@@ -202,20 +335,9 @@ def get_daily_verse(now=None):
             if image_url and image_url.startswith("//"):
                 image_url = "https:" + image_url
 
-    logging.info("Successfully fetched verse: %s", formatted_ref)
-    return {
-        "text": verse_text,
-        "reference": formatted_ref,
-        "image_url": image_url,
-    }
+    return {"text": verse_text, "reference": formatted_ref, "image_url": image_url}
 
 
 if __name__ == "__main__":
     result = get_daily_verse()
-    if result:
-        print("Fetched Data:")
-        print(f"Text: {result['text']}")
-        print(f"Reference: {result['reference']}")
-        print(f"Image: {result['image_url']}")
-    else:
-        print("Failed to fetch data.")
+    print(result if result else "Failed to fetch data.")

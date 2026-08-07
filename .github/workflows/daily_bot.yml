@@ -8,6 +8,12 @@ on:
         required: false
         type: boolean
         default: false
+  push:
+    branches:
+      - main
+    paths:
+      - scraper.py
+
 jobs:
   run-bot:
     runs-on: ubuntu-latest
