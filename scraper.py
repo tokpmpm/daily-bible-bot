@@ -140,6 +140,11 @@ def _find_cunp_url(compare_html: str, compare_url: str) -> str:
     return urljoin(compare_url, match.group(0)) if match else ""
 
 
+def _direct_cunp_url(osis_reference: str) -> str:
+    """Build the stable YouVersion CUNP page URL using version id 46."""
+    return f"https://www.bible.com/zh-TW/bible/46/{osis_reference}.CUNP"
+
+
 def _extract_cunp_text(verse_html: str) -> str:
     soup = BeautifulSoup(verse_html, "html.parser")
 
@@ -168,12 +173,18 @@ def _extract_cunp_text(verse_html: str) -> str:
 
 def _fetch_cunp_from_youversion(osis_reference: str) -> str:
     compare_url = f"https://www.bible.com/zh-TW/bible/compare/{osis_reference}"
-    compare_response = requests.get(compare_url, headers=HEADERS, timeout=15)
-    compare_response.raise_for_status()
+    cunp_url = ""
 
-    cunp_url = _find_cunp_url(compare_response.text, compare_response.url)
+    try:
+        compare_response = requests.get(compare_url, headers=HEADERS, timeout=15)
+        compare_response.raise_for_status()
+        cunp_url = _find_cunp_url(compare_response.text, compare_response.url)
+    except requests.RequestException as error:
+        logging.warning("Bible.com comparison page request failed: %s", error)
+
     if not cunp_url:
-        raise ValueError("CUNP link was not found on Bible.com comparison page")
+        cunp_url = _direct_cunp_url(osis_reference)
+        logging.info("CUNP link absent on comparison page; using direct Bible.com CUNP URL.")
 
     verse_response = requests.get(cunp_url, headers=HEADERS, timeout=15)
     verse_response.raise_for_status()
@@ -235,7 +246,7 @@ def get_daily_verse(now=None):
     if osis_reference:
         try:
             verse_text = _fetch_cunp_from_youversion(osis_reference)
-            logging.info("Fetched CUNP verse from Bible.com compare page.")
+            logging.info("Fetched CUNP verse from Bible.com.")
         except (requests.RequestException, ValueError) as error:
             logging.warning("Bible.com CUNP lookup failed; using CUV fallback: %s", error)
 
