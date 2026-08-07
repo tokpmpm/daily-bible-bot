@@ -25,6 +25,10 @@ COMPARE_HTML = """
 </body></html>
 """
 
+COMPARE_WITHOUT_CUNP_HTML = """
+<html><body><main>比較聖經譯本</main></body></html>
+"""
+
 CUNP_HTML = """
 <html><body><main>
   <span data-usfm="1JN.4.16">16 神愛我們的心，我們也知道也信。</span>
@@ -74,6 +78,12 @@ class ScraperTests(unittest.TestCase):
         )
         self.assertIn("/zh-TW/bible/46/1JN.4.16.CUNP-", url)
 
+    def test_builds_direct_cunp_url(self):
+        self.assertEqual(
+            scraper._direct_cunp_url("1JN.4.16"),
+            "https://www.bible.com/zh-TW/bible/46/1JN.4.16.CUNP",
+        )
+
     def test_extracts_cunp_text(self):
         self.assertEqual(
             scraper._extract_cunp_text(CUNP_HTML),
@@ -111,25 +121,54 @@ class ScraperTests(unittest.TestCase):
         self.assertIn("/bible/compare/1JN.4.16", mock_get.call_args_list[1].args[0])
 
     @patch("scraper.requests.get")
-    def test_falls_back_to_english_query_when_cunp_fails(self, mock_get):
+    def test_uses_direct_cunp_url_when_compare_has_no_link(self, mock_get):
         daily = FakeResponse(
             text=CURRENT_BIBLE_COM_HTML,
             url="https://www.bible.com/zh-TW/verse-of-the-day?day=219",
         )
-        compare_failure = FakeResponse(status=503)
-        api = FakeResponse(
-            json_data={"text": "神愛我們的心，我們也知道也信。"},
-            url="https://bible-api.com/1%20John%204%3A16?translation=cuv",
+        compare = FakeResponse(
+            text=COMPARE_WITHOUT_CUNP_HTML,
+            url="https://www.bible.com/zh-TW/bible/compare/1JN.4.16",
         )
-        api.headers = {"Content-Type": "application/json"}
-        mock_get.side_effect = [daily, compare_failure, api]
+        cunp = FakeResponse(
+            text=CUNP_HTML,
+            url="https://www.bible.com/zh-TW/bible/46/1JN.4.16.CUNP",
+        )
+        mock_get.side_effect = [daily, compare, cunp]
 
         result = scraper.get_daily_verse(
             now=datetime(2026, 8, 7, 10, 0, tzinfo=ZoneInfo("Asia/Taipei"))
         )
 
         self.assertEqual(result["reference"], "約翰一書 4章16節")
-        fallback_url = mock_get.call_args_list[2].args[0]
+        self.assertEqual(result["text"], "神愛我們的心，我們也知道也信。")
+        direct_url = mock_get.call_args_list[2].args[0]
+        self.assertEqual(
+            direct_url,
+            "https://www.bible.com/zh-TW/bible/46/1JN.4.16.CUNP",
+        )
+
+    @patch("scraper.requests.get")
+    def test_falls_back_to_english_api_query_when_all_cunp_requests_fail(self, mock_get):
+        daily = FakeResponse(
+            text=CURRENT_BIBLE_COM_HTML,
+            url="https://www.bible.com/zh-TW/verse-of-the-day?day=219",
+        )
+        compare_failure = FakeResponse(status=503)
+        direct_failure = FakeResponse(status=503)
+        api = FakeResponse(
+            json_data={"text": "神愛我們的心，我們也知道也信。"},
+            url="https://bible-api.com/1%20John%204%3A16?translation=cuv",
+        )
+        api.headers = {"Content-Type": "application/json"}
+        mock_get.side_effect = [daily, compare_failure, direct_failure, api]
+
+        result = scraper.get_daily_verse(
+            now=datetime(2026, 8, 7, 10, 0, tzinfo=ZoneInfo("Asia/Taipei"))
+        )
+
+        self.assertEqual(result["reference"], "約翰一書 4章16節")
+        fallback_url = mock_get.call_args_list[3].args[0]
         self.assertIn("1%20John%204%3A16", fallback_url)
         self.assertNotIn("%E7%B4%84%E7%BF%B0", fallback_url)
 
