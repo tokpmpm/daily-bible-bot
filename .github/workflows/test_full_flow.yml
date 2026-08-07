@@ -7,30 +7,12 @@ on:
         description: "HsiaoChen speech rate"
         required: false
         default: "-5%"
-  push:
-    branches:
-      - agent/use-youversion-compare-cunp
-    paths:
-      - scraper.py
-      - tests/test_scraper.py
-      - .github/workflows/test_full_flow.yml
-  pull_request:
-    branches:
-      - main
-    paths:
-      - scraper.py
-      - tests/test_scraper.py
-      - .github/workflows/test_full_flow.yml
 
 permissions:
   contents: read
 
 jobs:
   full-flow-test:
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' && github.head_ref == 'agent/use-youversion-compare-cunp') ||
-      contains(github.event.head_commit.message, '[tg-test]')
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -73,7 +55,7 @@ jobs:
           RUN_MODE: full_test
           DRY_RUN: "false"
           TTS_VOICE: zh-TW-HsiaoChenNeural
-          TTS_RATE: ${{ github.event.inputs.rate || '-5%' }}
+          TTS_RATE: ${{ github.event.inputs.rate }}
           TTS_VOLUME: "+0%"
           TTS_PITCH: "+0Hz"
           EDGE_TTS_MAX_ATTEMPTS: "3"
