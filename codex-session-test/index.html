@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="用來測試 Codex 原生多 Session、Agent 協作與訊息傳遞能力的 Prompt。"
+    />
+    <title>Codex 多 Session 協作測試 Prompt</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="topbar">
+        <a class="brand" href="./" aria-label="Codex Workflow Lab 首頁">
+          <span class="brand-mark" aria-hidden="true">↗</span>
+          <span>Codex Workflow Lab</span>
+        </a>
+        <div class="status-pill"><span class="status-dot"></span>Prompt ready</div>
+      </header>
+
+      <main>
+        <section class="hero" aria-labelledby="page-title">
+          <div class="hero-copy">
+            <p class="eyebrow">NATIVE COLLABORATION TEST</p>
+            <h1 id="page-title">測試 Codex 的<br /><em>多 Session 協作</em></h1>
+            <p class="hero-description">
+              一份可直接貼給 Codex 的測試 Prompt，用來驗證獨立 Agent、原生訊息、heartbeat、handoff 與 QA 往返流程。
+            </p>
+            <div class="hero-actions">
+              <button class="button button-primary" type="button" data-copy-prompt>
+                <span class="button-icon" aria-hidden="true">⧉</span>
+                複製完整 Prompt
+              </button>
+              <button class="button button-ghost" type="button" id="downloadButton">
+                下載 .txt
+              </button>
+            </div>
+            <div class="hero-meta" aria-label="Prompt 摘要">
+              <span>7 個測試步驟</span>
+              <span class="meta-separator"></span>
+              <span>A / B / C 三個角色</span>
+              <span class="meta-separator"></span>
+              <span>Session-to-session</span>
+            </div>
+          </div>
+
+          <aside class="hero-orbit" aria-label="角色關係">
+            <div class="orbit-glow"></div>
+            <div class="orbit-line orbit-line-one"></div>
+            <div class="orbit-line orbit-line-two"></div>
+            <div class="orbit-center">
+              <span class="orbit-label">COORDINATOR</span>
+              <strong>A</strong>
+              <small>主控 Session</small>
+            </div>
+            <div class="agent-node agent-b">
+              <span class="node-letter">B</span>
+              <span><b>Developer</b><small>build</small></span>
+            </div>
+            <div class="agent-node agent-c">
+              <span class="node-letter">C</span>
+              <span><b>Reviewer / QA</b><small>verify</small></span>
+            </div>
+          </aside>
+        </section>
+
+        <section class="content-grid" aria-label="Prompt 與測試流程">
+          <aside class="sidebar">
+            <div class="side-card flow-card">
+              <p class="card-kicker">TEST MAP</p>
+              <h2>協作路徑</h2>
+              <ol class="flow-list">
+                <li class="flow-item active">
+                  <span class="flow-number">01</span>
+                  <span><b>A → B</b><small>委派開發任務</small></span>
+                </li>
+                <li class="flow-item">
+                  <span class="flow-number">02</span>
+                  <span><b>Wait / Wake</b><small>等待與 heartbeat</small></span>
+                </li>
+                <li class="flow-item">
+                  <span class="flow-number">03</span>
+                  <span><b>B → A</b><small>回報修改結果</small></span>
+                </li>
+                <li class="flow-item">
+                  <span class="flow-number">04</span>
+                  <span><b>A → C</b><small>交接給 QA</small></span>
+                </li>
+                <li class="flow-item">
+                  <span class="flow-number">05</span>
+                  <span><b>C ↔ B</b><small>修正與再次驗證</small></span>
+                </li>
+                <li class="flow-item">
+                  <span class="flow-number">06</span>
+                  <span><b>C → A</b><small>回報 QA PASS</small></span>
+                </li>
+              </ol>
+            </div>
+
+            <div class="side-card guardrail-card">
+              <span class="guardrail-icon" aria-hidden="true">✦</span>
+              <p class="card-kicker">GUARDRAIL</p>
+              <h2>禁止模擬通訊</h2>
+              <p>不建立 handoff.md、message.txt 或 STATE.md，也不使用 Git commit message 傳話。</p>
+            </div>
+          </aside>
+
+          <section class="prompt-card" aria-labelledby="prompt-heading">
+            <div class="prompt-toolbar">
+              <div>
+                <p class="card-kicker">FULL PROMPT</p>
+                <h2 id="prompt-heading">直接貼給 Codex</h2>
+              </div>
+              <button class="copy-mini" type="button" data-copy-prompt>複製</button>
+            </div>
+            <div class="prompt-body">
+              <div class="prompt-caption"><span class="caption-dot"></span>codex-session-collaboration.md</div>
+              <pre id="promptText">我想測試 Codex 是否具備原生的多 Session / Agent 協作、heartbeat、handoff 與 session-to-session messaging 能力。
+
+請把你自己當成「Coordinator / Session A」，完成以下測試。
+
+## 任務
+
+請建立或呼叫兩個獨立工作 Session / Agent：
+
+- Session B：Developer
+- Session C：Reviewer / QA
+
+不要由你自己假裝扮演 B、C。
+必須使用 Codex 實際提供的 thread / agent / session / send-message / handoff / heartbeat / wakeup 等原生能力。
+
+如果目前環境沒有其中某項能力，請明確告訴我缺少哪個工具，不要用檔案模擬。
+
+---
+
+## 測試流程
+
+### Step 1 — A → B
+
+請 Session A 主動傳訊息給 Session B：
+
+「請檢查目前 repository，找一個安全、不影響主要功能的小改善，完成後告訴我你修改了什麼，但先不要通知使用者。」
+
+B 必須自己查看 repo 並完成一個很小的修改。
+
+---
+
+### Step 2 — A 等待 B
+
+Session A 不要自己去完成 B 的工作。
+
+等待 B。
+
+如果 Codex 支援 heartbeat / wakeup：
+
+請設定適當的 heartbeat，讓 A 可以稍後醒來確認 B 是否完成。
+
+如果 B 尚未完成：
+
+A 主動發訊息詢問 B：
+
+「目前進度如何？完成後請直接通知我。」
+
+我要測試 B 的 session 裡是否真的會出現來自 A 的訊息。
+
+---
+
+### Step 3 — B → A
+
+B 完成後：
+
+B 必須主動通知 A：
+
+- 修改內容
+- 修改檔案
+- 是否有測試
+- 是否有任何風險
+
+不要靠我人工複製訊息。
+
+---
+
+### Step 4 — A → C
+
+A 收到 B 的完成通知後，把 B 的結果 handoff 給 Session C。
+
+請 C：
+
+1. 查看 B 真正修改的 code
+2. Review 修改
+3. 執行適合的測試
+4. 判斷 PASS 或 FAIL
+
+---
+
+### Step 5 — C → B
+
+如果 C 發現問題：
+
+不要通知我處理。
+
+C 直接把具體問題傳給 B，要求 B 修正。
+
+B 修正後再主動通知 C。
+
+C 再次驗證。
+
+B ↔ C 可以自行往返，直到 PASS。
+
+---
+
+### Step 6 — C → A
+
+C 驗證 PASS 後，主動通知 A：
+
+「QA PASS」
+
+並附上簡短驗證結果。
+
+---
+
+### Step 7 — A 最終回報
+
+只有整個流程完成後，A 才回覆我。
+
+最後請列出實際發生的協作紀錄：
+
+A → B
+B → A
+A → C
+C → B（若有）
+B → C（若有）
+C → A
+
+並告訴我：
+
+1. 哪些是實際 Codex session-to-session message
+2. 是否使用 heartbeat / wakeup
+3. 是否使用 handoff
+4. 是否建立獨立 thread / session / agent
+5. B、C 的 thread/session 名稱或 ID（如果系統允許顯示）
+6. 哪些功能目前環境不支援
+
+## 非常重要
+
+不要用以下方式假裝完成測試：
+
+- 建立 handoff.md
+- 建立 message.txt
+- 用 STATE.md 傳話
+- 用 Git commit message 當作 Agent 通訊
+- 由 Session A 自己扮演 B、C
+- 在同一個回答裡模擬三個角色對話
+
+我要測試的是：
+
+「Codex Agent A 是否真的可以主動聯絡另一個 Codex Session B，等待它、喚醒自己、收到 B 的回覆，再把工作交給 C。」
+
+如果原生能力不可用，測試失敗也沒關係。
+
+請直接告訴我：
+「目前這個 Codex 環境無法做到哪一步」
+
+不要自行改用模擬方案。</pre>
+            </div>
+          </section>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <span>Codex Workflow Lab</span>
+        <span>原生協作能力驗證工具</span>
+      </footer>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite">Prompt 已複製</div>
+    <script src="./script.js"></script>
+  </body>
+</html>
