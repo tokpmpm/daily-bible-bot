@@ -51,6 +51,17 @@ CUNP_META_HTML = """
 </head><body></body></html>
 """
 
+CLIENT_CHALLENGE_HTML = """
+<html><head><title>Client Challenge</title></head>
+<body><script src="/_fs-ch-abc/assets/challenge.js"></script></body></html>
+"""
+
+BIBLE_GATEWAY_HTML = """
+<html><body>
+  <script>BG.appData({"ref_display":"Psalm 149:4","reading_date":"2026-08-08"});</script>
+</body></html>
+"""
+
 
 class FakeResponse:
     def __init__(self, *, text="", json_data=None, url="https://example.test", status=200):
@@ -71,6 +82,10 @@ class FakeResponse:
 
 
 class ScraperTests(unittest.TestCase):
+    def test_detects_antibot_challenge_page(self):
+        self.assertTrue(scraper._is_antibot_challenge(CLIENT_CHALLENGE_HTML))
+        self.assertFalse(scraper._is_antibot_challenge(CURRENT_BIBLE_COM_HTML))
+
     def test_extracts_reference_and_osis(self):
         reference, data, source, osis = scraper._extract_reference_and_data(
             CURRENT_BIBLE_COM_HTML
@@ -146,7 +161,7 @@ class ScraperTests(unittest.TestCase):
             },
         )
         self.assertEqual(len(mock_get.call_args_list), 3)
-        self.assertIn("/bible/compare/1JN.4.16", mock_get.call_args_list[1].args[0])
+        self.assertIn("/bible/compare/1JN.4.16", mock_get.call_args_list[1][0][0])
 
     @patch("scraper.requests.get")
     def test_returns_compare_page_cunp_without_requesting_direct_page(self, mock_get):
@@ -190,14 +205,14 @@ class ScraperTests(unittest.TestCase):
 
         self.assertEqual(result["reference"], "約翰一書 4章16節")
         self.assertIn("神就是愛", result["text"])
-        direct_url = mock_get.call_args_list[2].args[0]
+        direct_url = mock_get.call_args_list[2][0][0]
         self.assertEqual(
             direct_url,
             "https://www.bible.com/zh-TW/bible/46/1JN.4.16.CUNP-%E7%A5%9E",
         )
 
     @patch("scraper.requests.get")
-    def test_falls_back_to_english_api_query_when_all_cunp_requests_fail(self, mock_get):
+    def test_falls_back_to_chinese_api_query_when_all_cunp_requests_fail(self, mock_get):
         daily = FakeResponse(
             text=CURRENT_BIBLE_COM_HTML,
             url="https://www.bible.com/zh-TW/verse-of-the-day?day=219",
@@ -216,9 +231,51 @@ class ScraperTests(unittest.TestCase):
         )
 
         self.assertEqual(result["reference"], "約翰一書 4章16節")
-        fallback_url = mock_get.call_args_list[3].args[0]
-        self.assertIn("1%20John%204%3A16", fallback_url)
-        self.assertNotIn("%E7%B4%84%E7%BF%B0", fallback_url)
+        fallback_url = mock_get.call_args_list[3][0][0]
+        self.assertIn("%E7%B4%84%E7%BF%B0%E4%B8%80%E6%9B%B8", fallback_url)
+        self.assertNotIn("1%20John%204%3A16", fallback_url)
+
+    @patch("scraper.requests.get")
+    def test_falls_back_to_bible_gateway_when_bible_com_challenges(self, mock_get):
+        challenge_responses = [
+            FakeResponse(
+                text=CLIENT_CHALLENGE_HTML,
+                url=f"https://www.bible.com/zh-TW/verse-of-the-day?day={day}",
+            )
+            for day in (220, 220, 220)
+        ]
+        gateway = FakeResponse(
+            text=BIBLE_GATEWAY_HTML,
+            url="https://www.biblegateway.com/reading-plans/verse-of-the-day/2026/08/08",
+        )
+        api = FakeResponse(
+            json_data={"text": "耶和華喜愛他的百姓；他要用救恩當作謙卑人的妝飾。"}
+        )
+        api.headers = {"Content-Type": "application/json"}
+        mock_get.side_effect = [*challenge_responses, gateway, api]
+
+        result = scraper.get_daily_verse(
+            now=datetime(2026, 8, 8, 10, 0, tzinfo=ZoneInfo("Asia/Taipei"))
+        )
+
+        self.assertEqual(result["reference"], "詩篇 149章4節")
+        self.assertEqual(
+            result["text"], "耶和華喜愛他的百姓；他要用救恩當作謙卑人的妝飾。"
+        )
+        self.assertIn("biblegateway.com", mock_get.call_args_list[3][0][0])
+        self.assertEqual(len(mock_get.call_args_list), 5)
+
+    @patch("scraper.requests.get")
+    def test_retries_cuv_api_with_formal_first_john_book_name(self, mock_get):
+        not_found = FakeResponse(json_data={"error": "not found"})
+        verse = FakeResponse(json_data={"text": "神愛我們的心，我們也知道也信。"})
+        mock_get.side_effect = [not_found, verse]
+
+        result = scraper._fetch_cuv_fallback("約翰一書", "4:16")
+
+        self.assertEqual(result, "神愛我們的心，我們也知道也信。")
+        formal_name_url = mock_get.call_args_list[1][0][0]
+        self.assertIn("%E7%B4%84%E7%BF%B0%E5%A3%B9%E6%9B%B8", formal_name_url)
 
 
 if __name__ == "__main__":

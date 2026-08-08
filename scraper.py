@@ -50,6 +50,45 @@ HEADERS = {
 }
 
 
+class ScraperSourceError(Exception):
+    """Base error for a source that cannot provide usable scraper data."""
+
+
+class AntiBotChallenge(ScraperSourceError):
+    """Raised when a site returns an anti-bot challenge instead of content."""
+
+
+class ReferenceUnavailable(ScraperSourceError):
+    """Raised when a provider cannot provide today's verse reference."""
+
+
+_CUV_API_BOOK_ALIASES = {
+    # bible-api.com uses formal CUV book names for these books.
+    "約翰一書": "約翰壹書",
+    "約翰二書": "約翰貳書",
+    "約翰三書": "約翰參書",
+}
+
+
+def _is_antibot_challenge(html_text: str) -> bool:
+    """Detect common challenge pages that still return HTTP 200."""
+    body = (html_text or "").lower()
+    return (
+        "client challenge" in body
+        or "/_fs-ch" in body
+        or "cf-chl-" in body
+    )
+
+
+def _get_html(url: str, *, headers=None, timeout: int = 15):
+    """Fetch HTML and reject anti-bot challenge pages as source failures."""
+    response = requests.get(url, headers=headers or HEADERS, timeout=timeout)
+    response.raise_for_status()
+    if _is_antibot_challenge(response.text):
+        raise AntiBotChallenge(f"Anti-bot challenge returned by {url}")
+    return response
+
+
 def _normalize_reference(book: str, verses: str) -> str:
     canonical_book = _BOOK_LOOKUP.get(book.lower(), book.strip())
     normalized_verses = re.sub(r"\s*[–—]\s*", "-", verses)
@@ -64,6 +103,16 @@ def _find_reference(text: str) -> str:
     if not match:
         return ""
     return _normalize_reference(match.group("book"), match.group("verses"))
+
+
+def _split_reference(reference: str):
+    """Return the English book and verse portion from a normalized reference."""
+    match = _REFERENCE_PATTERN.fullmatch((reference or "").strip())
+    if not match:
+        return None
+    return match.group("book"), re.sub(
+        r"\s*[–—]\s*", "-", match.group("verses")
+    ).replace(" ", "")
 
 
 def _find_osis_reference(soup: BeautifulSoup) -> str:
@@ -127,6 +176,113 @@ def _daily_verse_urls(now=None):
         f"https://www.bible.com/verse-of-the-day?day={day_of_year}",
         "https://www.bible.com/zh-TW/verse-of-the-day",
     ]
+
+
+def _fetch_bible_com_reference(now=None):
+    """Fetch today's reference from Bible.com, rejecting challenge pages."""
+    failures = []
+
+    for url in _daily_verse_urls(now):
+        try:
+            response = _get_html(url)
+            reference, data, source, osis_reference = _extract_reference_and_data(
+                response.text
+            )
+            if reference:
+                logging.info(
+                    "Bible.com reference extracted via %s from %s: %s (osis=%s)",
+                    source,
+                    getattr(response, "url", url),
+                    reference,
+                    osis_reference or "not-found",
+                )
+                return reference, data, osis_reference, f"Bible.com/{source}"
+
+            failures.append(f"{url}: reference not found")
+        except (requests.RequestException, AntiBotChallenge) as error:
+            failures.append(f"{url}: {type(error).__name__}: {error}")
+            logging.warning("Bible.com reference request failed for %s: %s", url, error)
+
+    raise ReferenceUnavailable("; ".join(failures))
+
+
+def _bible_gateway_daily_url(now=None) -> str:
+    taipei_now = now or datetime.now(ZoneInfo("Asia/Taipei"))
+    return (
+        "https://www.biblegateway.com/reading-plans/verse-of-the-day/"
+        f"{taipei_now.year:04d}/{taipei_now.month:02d}/{taipei_now.day:02d}"
+    )
+
+
+def _decode_json_string(value: str) -> str:
+    try:
+        return json.loads(f'"{value}"')
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return html.unescape(value or "")
+
+
+def _fetch_bible_gateway_reference(now=None):
+    """Fetch a date-addressable daily reference from Bible Gateway."""
+    url = _bible_gateway_daily_url(now)
+    response = _get_html(url)
+    match = re.search(r'"ref_display"\s*:\s*"([^"]+)"', response.text)
+    if not match:
+        match = re.search(r'data-ref_display="([^"]+)"', response.text)
+    if not match:
+        raise ReferenceUnavailable("Bible Gateway reference was not found")
+
+    reference = _find_reference(_decode_json_string(match.group(1)))
+    if not reference:
+        raise ReferenceUnavailable(
+            f"Bible Gateway reference could not be parsed: {match.group(1)}"
+        )
+
+    logging.warning("Using Bible Gateway reference fallback: %s", reference)
+    return reference, {}, "", "BibleGateway"
+
+
+def _fetch_ourmanna_reference(now=None):
+    """Fetch a last-resort daily reference from OurManna's JSON endpoint."""
+    del now  # The provider owns the current-day calculation.
+    url = "https://beta.ourmanna.com/api/v1/get/?format=json"
+    response = requests.get(
+        url,
+        headers={"Accept": "application/json", "User-Agent": HEADERS["User-Agent"]},
+        timeout=15,
+    )
+    response.raise_for_status()
+    if _is_antibot_challenge(response.text):
+        raise AntiBotChallenge(f"Anti-bot challenge returned by {url}")
+
+    payload = response.json()
+    raw_reference = payload.get("verse", {}).get("details", {}).get("reference", "")
+    reference = _find_reference(raw_reference)
+    if not reference:
+        raise ReferenceUnavailable(
+            f"OurManna reference could not be parsed: {raw_reference}"
+        )
+
+    logging.warning("Using OurManna reference fallback: %s", reference)
+    return reference, {}, "", "OurManna"
+
+
+def _fetch_daily_reference(now=None):
+    """Fetch a reference using independent providers in priority order."""
+    providers = (
+        _fetch_bible_com_reference,
+        _fetch_bible_gateway_reference,
+        _fetch_ourmanna_reference,
+    )
+    failures = []
+
+    for provider in providers:
+        try:
+            return provider(now)
+        except (requests.RequestException, ScraperSourceError, ValueError) as error:
+            failures.append(f"{provider.__name__}: {type(error).__name__}: {error}")
+            logging.warning("Daily reference provider failed: %s", error)
+
+    raise ReferenceUnavailable("; ".join(failures))
 
 
 def _find_cunp_url(compare_html: str, compare_url: str) -> str:
@@ -235,8 +391,7 @@ def _fetch_cunp_from_youversion(osis_reference: str) -> str:
     cunp_url = ""
 
     try:
-        compare_response = requests.get(compare_url, headers=HEADERS, timeout=15)
-        compare_response.raise_for_status()
+        compare_response = _get_html(compare_url)
 
         compare_text = _extract_cunp_from_compare_page(compare_response.text)
         if compare_text:
@@ -244,80 +399,73 @@ def _fetch_cunp_from_youversion(osis_reference: str) -> str:
             return compare_text
 
         cunp_url = _find_cunp_url(compare_response.text, compare_response.url)
-    except requests.RequestException as error:
+    except (requests.RequestException, ScraperSourceError) as error:
         logging.warning("Bible.com comparison page request failed: %s", error)
 
     if not cunp_url:
         cunp_url = _direct_cunp_url(osis_reference)
         logging.info("CUNP link absent on comparison page; using direct Bible.com CUNP URL.")
 
-    verse_response = requests.get(cunp_url, headers=HEADERS, timeout=15)
-    verse_response.raise_for_status()
+    verse_response = _get_html(cunp_url)
     verse_text = _extract_cunp_text(verse_response.text)
     if not verse_text:
         raise ValueError("CUNP verse text was empty on Bible.com")
     return verse_text
 
 
-def _fetch_cuv_fallback(eng_book: str, verses_ref: str) -> str:
-    query = f"{eng_book} {verses_ref}"
-    api_url = f"https://bible-api.com/{quote(query)}?translation=cuv"
-    response = requests.get(api_url, timeout=15)
-    response.raise_for_status()
-    data = response.json()
-    text = data.get("text", "").strip()
-    if not text:
-        raise ValueError(f"Bible API returned an empty verse for {query}")
-    return text
+def _fetch_cuv_fallback(chi_book: str, verses_ref: str) -> str:
+    """Fetch CUV text using bible-api.com's Traditional Chinese book names."""
+    candidate_books = [chi_book]
+    api_alias = _CUV_API_BOOK_ALIASES.get(chi_book)
+    if api_alias and api_alias not in candidate_books:
+        candidate_books.append(api_alias)
+
+    failures = []
+    for api_book in candidate_books:
+        query = f"{api_book} {verses_ref}"
+        api_url = f"https://bible-api.com/{quote(query)}?translation=cuv"
+        try:
+            response = requests.get(api_url, timeout=15)
+            response.raise_for_status()
+            data = response.json()
+            text = data.get("text", "").strip()
+            if text:
+                return text
+            failures.append(f"{query}: empty response")
+        except (requests.RequestException, ValueError) as error:
+            failures.append(f"{query}: {type(error).__name__}: {error}")
+
+    raise ValueError("; ".join(failures) or "Bible API returned no verse text")
 
 
 def get_daily_verse(now=None):
-    """Fetch today's reference, prefer Bible.com CUNP, then fall back to bible-api.com."""
-    ref_title = ""
-    data = {}
-    osis_reference = ""
-
-    for url in _daily_verse_urls(now):
-        try:
-            response = requests.get(url, headers=HEADERS, timeout=15)
-            response.raise_for_status()
-            ref_title, data, source, osis_reference = _extract_reference_and_data(response.text)
-            if ref_title:
-                logging.info(
-                    "Bible.com reference extracted via %s from %s: %s (osis=%s)",
-                    source,
-                    response.url,
-                    ref_title,
-                    osis_reference or "not-found",
-                )
-                break
-        except requests.RequestException as error:
-            logging.warning("Bible.com request failed for %s: %s", url, error)
-
-    if not ref_title:
-        logging.error("Could not find today's Bible reference after all fallbacks.")
+    """Fetch today's reference, then fetch Chinese text with layered fallbacks."""
+    try:
+        ref_title, data, osis_reference, reference_source = _fetch_daily_reference(now)
+    except ReferenceUnavailable as error:
+        logging.error("All daily reference sources failed: %s", error)
         return None
 
-    match = re.fullmatch(r"([\d\sA-Za-z]+)\s+([\d:,-]+)", ref_title)
-    if not match:
+    parsed_reference = _split_reference(ref_title)
+    if not parsed_reference:
         logging.error("Could not parse reference format: %s", ref_title)
         return None
 
-    eng_book = match.group(1).strip()
-    verses_ref = match.group(2).strip()
+    eng_book, verses_ref = parsed_reference
     chi_book = book_mapping.get(eng_book, eng_book)
+    logging.info("Using daily reference source: %s (%s)", reference_source, ref_title)
 
     verse_text = ""
     if osis_reference:
         try:
             verse_text = _fetch_cunp_from_youversion(osis_reference)
             logging.info("Fetched CUNP verse from Bible.com.")
-        except (requests.RequestException, ValueError) as error:
+        except (requests.RequestException, ScraperSourceError, ValueError) as error:
             logging.warning("Bible.com CUNP lookup failed; using CUV fallback: %s", error)
 
     if not verse_text:
         try:
-            verse_text = _fetch_cuv_fallback(eng_book, verses_ref)
+            verse_text = _fetch_cuv_fallback(chi_book, verses_ref)
             logging.info("Fetched CUV verse from bible-api.com fallback.")
         except (requests.RequestException, ValueError) as error:
             logging.error("All Chinese verse sources failed: %s", error)
