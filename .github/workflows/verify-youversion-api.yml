@@ -7,39 +7,98 @@ on:
   workflow_dispatch:
 
 jobs:
-  verify:
+  secret-check:
     runs-on: ubuntu-latest
+    steps:
+      - name: Verify App Key is available
+        env:
+          YOUVERSION_APP_KEY: ${{ secrets.YOUVERSION_APP_KEY }}
+        run: |
+          if [ -z "$YOUVERSION_APP_KEY" ]; then
+            echo "YOUVERSION_APP_KEY is missing or empty"
+            exit 1
+          fi
+          echo "YOUVERSION_APP_KEY is present (length=${#YOUVERSION_APP_KEY})"
+
+  votd-reference:
+    runs-on: ubuntu-latest
+    needs: secret-check
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
       - name: Install dependencies
         run: pip install requests
-
-      - name: Verify today's VOTD and CUNP passage
+      - name: Verify today's VOTD reference
         env:
           YOUVERSION_APP_KEY: ${{ secrets.YOUVERSION_APP_KEY }}
         run: |
           python - <<'PY'
           from datetime import datetime
           from zoneinfo import ZoneInfo
-          from youversion_api import get_daily_verse
+          import os
+          import requests
 
           now = datetime.now(ZoneInfo('Asia/Taipei'))
-          result = get_daily_verse(now)
-          print(f"VERIFY_DAY={result['day']}")
-          print(f"VERIFY_PASSAGE={result['passage_id']}")
-          print(f"VERIFY_REFERENCE={result['reference']}")
-          print(f"VERIFY_TEXT_LENGTH={len(result['text'])}")
-          print(f"VERIFY_TEXT_PREVIEW={result['text'][:80]}")
-          assert result['day'] == now.timetuple().tm_yday
-          assert result['passage_id']
-          assert result['reference']
-          assert result['text']
-          print('YOUVERSION_API_LIVE_PROOF=true')
+          day = now.timetuple().tm_yday
+          url = f"https://api.youversion.com/v1/verse_of_the_days/{day}"
+          response = requests.get(
+              url,
+              headers={"X-YVP-App-Key": os.environ["YOUVERSION_APP_KEY"], "Accept": "application/json"},
+              timeout=20,
+          )
+          print(f"VOTD_HTTP_STATUS={response.status_code}")
+          response.raise_for_status()
+          data = response.json()
+          print(f"VOTD_DAY={data.get('day')}")
+          print(f"VOTD_PASSAGE={data.get('passage_id')}")
+          assert data.get('day') == day
+          assert data.get('passage_id')
+          print('VOTD_API_LIVE_PROOF=true')
+          PY
+
+  cunp-passage:
+    runs-on: ubuntu-latest
+    needs: votd-reference
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install requests
+      - name: Verify CUNP passage access
+        env:
+          YOUVERSION_APP_KEY: ${{ secrets.YOUVERSION_APP_KEY }}
+        run: |
+          python - <<'PY'
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+          import os
+          import requests
+
+          now = datetime.now(ZoneInfo('Asia/Taipei'))
+          day = now.timetuple().tm_yday
+          headers = {"X-YVP-App-Key": os.environ["YOUVERSION_APP_KEY"], "Accept": "application/json"}
+          votd_url = f"https://api.youversion.com/v1/verse_of_the_days/{day}"
+          votd = requests.get(votd_url, headers=headers, timeout=20)
+          votd.raise_for_status()
+          passage_id = votd.json()["passage_id"]
+
+          passage_url = f"https://api.youversion.com/v1/bibles/46/passages/{passage_id}"
+          response = requests.get(passage_url, headers=headers, timeout=20)
+          print(f"CUNP_HTTP_STATUS={response.status_code}")
+          response.raise_for_status()
+          data = response.json()
+          print(f"CUNP_PASSAGE={passage_id}")
+          print(f"CUNP_REFERENCE={data.get('reference')}")
+          print(f"CUNP_TEXT_LENGTH={len(data.get('content', ''))}")
+          assert data.get('reference')
+          assert data.get('content')
+          print('CUNP_API_LIVE_PROOF=true')
           PY
