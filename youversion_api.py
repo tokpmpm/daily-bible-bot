@@ -56,14 +56,22 @@ def _day_of_year(now=None):
 def _reference_from_cunp_title(title):
     if not title:
         return ""
-    for english_book, chinese_book in scraper.book_mapping.items():
+    for _, chinese_book in scraper.book_mapping.items():
         match = re.search(
             rf"{re.escape(chinese_book)}\s+(\d+:\d+(?:\s*[-–—]\s*\d+)*)",
             title,
         )
         if match:
-            return scraper._normalize_reference(english_book, match.group(1))
+            verses = re.sub(r"\s*[–—]\s*", "-", match.group(1))
+            return f"{chinese_book} {verses}"
     return ""
+
+
+def _to_chinese_reference(reference):
+    for english_book, chinese_book in scraper.book_mapping.items():
+        if reference.startswith(f"{english_book} "):
+            return reference.replace(english_book, chinese_book, 1)
+    return reference
 
 
 def _fetch_cunp_page(passage_id):
@@ -77,6 +85,7 @@ def _fetch_cunp_page(passage_id):
     soup = BeautifulSoup(response.text, "html.parser")
     title = soup.title.get_text(" ", strip=True) if soup.title else ""
     reference, _, source, _ = scraper._extract_reference_and_data(response.text)
+    reference = _to_chinese_reference(reference)
     if not reference:
         reference = _reference_from_cunp_title(title)
 
