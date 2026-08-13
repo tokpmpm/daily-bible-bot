@@ -83,11 +83,13 @@ jobs:
 
           headers = {"X-YVP-App-Key": os.environ["YOUVERSION_APP_KEY"], "Accept": "application/json"}
           versions_response = requests.get(
-              "https://api.youversion.com/v1/bibles?language_ranges=zh-TW&page_size=100",
+              "https://api.youversion.com/v1/bibles?language_ranges=zh*",
               headers=headers,
               timeout=20,
           )
           print(f"BIBLES_HTTP_STATUS={versions_response.status_code}")
+          if versions_response.status_code != 200:
+              print(versions_response.text[:500])
           versions_response.raise_for_status()
           versions = versions_response.json().get("data", [])
           candidates = []
@@ -121,6 +123,8 @@ jobs:
           passage_url = f"https://api.youversion.com/v1/bibles/{version_id}/passages/{passage_id}"
           response = requests.get(passage_url, headers=headers, timeout=20)
           print(f"CUNP_HTTP_STATUS={response.status_code}")
+          if response.status_code != 200:
+              print(response.text[:500])
           response.raise_for_status()
           data = response.json()
           print(f"CUNP_PASSAGE={passage_id}")
