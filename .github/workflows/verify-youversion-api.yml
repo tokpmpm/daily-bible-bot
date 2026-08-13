@@ -1,0 +1,45 @@
+name: Verify YouVersion API
+
+on:
+  push:
+    branches:
+      - fix/youversion-api-20260813
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Verify today's VOTD and CUNP passage
+        env:
+          YOUVERSION_APP_KEY: ${{ secrets.YOUVERSION_APP_KEY }}
+        run: |
+          python - <<'PY'
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+          from youversion_api import get_daily_verse
+
+          now = datetime.now(ZoneInfo('Asia/Taipei'))
+          result = get_daily_verse(now)
+          print(f"VERIFY_DAY={result['day']}")
+          print(f"VERIFY_PASSAGE={result['passage_id']}")
+          print(f"VERIFY_REFERENCE={result['reference']}")
+          print(f"VERIFY_TEXT_LENGTH={len(result['text'])}")
+          print(f"VERIFY_TEXT_PREVIEW={result['text'][:80]}")
+          assert result['day'] == now.timetuple().tm_yday
+          assert result['passage_id']
+          assert result['reference']
+          assert result['text']
+          print('YOUVERSION_API_LIVE_PROOF=true')
+          PY
