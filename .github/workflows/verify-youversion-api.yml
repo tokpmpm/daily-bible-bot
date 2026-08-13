@@ -70,8 +70,8 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install dependencies
-        run: pip install requests
-      - name: Discover CUNP version and verify passage access
+        run: pip install requests beautifulsoup4
+      - name: Verify CUNP passage from deterministic Bible.com URL
         env:
           YOUVERSION_APP_KEY: ${{ secrets.YOUVERSION_APP_KEY }}
         run: |
@@ -79,37 +79,14 @@ jobs:
           from datetime import datetime
           from zoneinfo import ZoneInfo
           import os
+          import re
           import requests
+          from bs4 import BeautifulSoup
 
-          headers = {"X-YVP-App-Key": os.environ["YOUVERSION_APP_KEY"], "Accept": "application/json"}
-          versions_response = requests.get(
-              "https://api.youversion.com/v1/bibles?language_ranges%5B%5D=zh*",
-              headers=headers,
-              timeout=20,
-          )
-          print(f"BIBLES_HTTP_STATUS={versions_response.status_code}")
-          if versions_response.status_code != 200:
-              print(versions_response.text[:500])
-          versions_response.raise_for_status()
-          versions = versions_response.json().get("data", [])
-          candidates = []
-          for version in versions:
-              haystack = " ".join(str(version.get(key, "")) for key in ("abbreviation", "localized_abbreviation", "title", "localized_title"))
-              if "CUNP" in haystack.upper() or "新標點和合本" in haystack or "和合本" in haystack:
-                  candidates.append(version)
-
-          print("CUNP_CANDIDATES=" + "; ".join(
-              f"{v.get('id')}:{v.get('abbreviation')}:{v.get('title')}" for v in candidates
-          ))
-          assert candidates, "Could not find a CUNP/和合本 Bible version in YouVersion API"
-
-          version = next(
-              (v for v in candidates if "CUNP" in str(v.get("abbreviation", "")).upper()),
-              candidates[0],
-          )
-          version_id = version["id"]
-          print(f"CUNP_VERSION_ID={version_id}")
-
+          headers = {
+              "X-YVP-App-Key": os.environ["YOUVERSION_APP_KEY"],
+              "Accept": "application/json",
+          }
           now = datetime.now(ZoneInfo('Asia/Taipei'))
           day = now.timetuple().tm_yday
           votd = requests.get(
@@ -119,19 +96,28 @@ jobs:
           )
           votd.raise_for_status()
           passage_id = votd.json()["passage_id"]
+          print(f"VOTD_PASSAGE={passage_id}")
 
-          passage_url = f"https://api.youversion.com/v1/bibles/{version_id}/passages/{passage_id}"
-          response = requests.get(passage_url, headers=headers, timeout=20)
-          print(f"CUNP_HTTP_STATUS={response.status_code}")
-          if response.status_code != 200:
-              print(response.text[:500])
-          response.raise_for_status()
-          data = response.json()
-          print(f"CUNP_PASSAGE={passage_id}")
-          print(f"CUNP_REFERENCE={data.get('reference')}")
-          print(f"CUNP_TEXT_LENGTH={len(data.get('content', ''))}")
-          print(f"CUNP_TEXT_PREVIEW={data.get('content', '')[:80]}")
-          assert data.get('reference')
-          assert data.get('content')
-          print('CUNP_API_LIVE_PROOF=true')
+          cunp_url = f"https://www.bible.com/zh-TW/bible/46/{passage_id}.CUNP-%E7%A5%9E"
+          page = requests.get(
+              cunp_url,
+              headers={
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/150 Safari/537.36",
+                  "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.8",
+                  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                  "Cache-Control": "no-cache",
+              },
+              timeout=20,
+          )
+          print(f"CUNP_PAGE_HTTP_STATUS={page.status_code}")
+          page.raise_for_status()
+          soup = BeautifulSoup(page.text, "html.parser")
+          title = soup.title.get_text(" ", strip=True) if soup.title else ""
+          print(f"CUNP_PAGE_TITLE={title[:160]}")
+          visible_text = soup.get_text(" ", strip=True)
+          chinese_chars = len(re.findall(r"[\u4e00-\u9fff]", visible_text))
+          print(f"CUNP_CHINESE_CHAR_COUNT={chinese_chars}")
+          assert chinese_chars >= 20, "Bible.com CUNP page did not contain enough Chinese text"
+          assert "CUNP" in visible_text or "新標點和合本" in visible_text
+          print('CUNP_BIBLE_COM_LIVE_PROOF=true')
           PY
