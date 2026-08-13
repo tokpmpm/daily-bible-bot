@@ -1,3 +1,4 @@
+# Live verification helper for YouVersion Platform API.
 import logging
 import os
 from datetime import datetime
