@@ -7,6 +7,7 @@ on:
         description: "HsiaoChen speech rate"
         required: false
         default: "-5%"
+  pull_request:
 
 permissions:
   contents: read
@@ -55,7 +56,7 @@ jobs:
           RUN_MODE: full_test
           DRY_RUN: "false"
           TTS_VOICE: zh-TW-HsiaoChenNeural
-          TTS_RATE: ${{ github.event.inputs.rate }}
+          TTS_RATE: "-5%"
           TTS_VOLUME: "+0%"
           TTS_PITCH: "+0Hz"
           EDGE_TTS_MAX_ATTEMPTS: "3"
