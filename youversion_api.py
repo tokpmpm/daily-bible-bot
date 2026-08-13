@@ -2,7 +2,6 @@ import logging
 import os
 import re
 from datetime import datetime
-from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 import requests
@@ -54,6 +53,19 @@ def _day_of_year(now=None):
     return taipei_now.timetuple().tm_yday
 
 
+def _reference_from_cunp_title(title):
+    if not title:
+        return ""
+    for english_book, chinese_book in scraper.book_mapping.items():
+        match = re.search(
+            rf"{re.escape(chinese_book)}\s+(\d+:\d+(?:\s*[-–—]\s*\d+)*)",
+            title,
+        )
+        if match:
+            return scraper._normalize_reference(english_book, match.group(1))
+    return ""
+
+
 def _fetch_cunp_page(passage_id):
     cunp_url = (
         f"https://www.bible.com/zh-TW/bible/{CUNP_VERSION_ID}/"
@@ -62,35 +74,35 @@ def _fetch_cunp_page(passage_id):
     response = requests.get(cunp_url, headers=PAGE_HEADERS, timeout=20)
     response.raise_for_status()
 
+    soup = BeautifulSoup(response.text, "html.parser")
+    title = soup.title.get_text(" ", strip=True) if soup.title else ""
     reference, _, source, _ = scraper._extract_reference_and_data(response.text)
+    if not reference:
+        reference = _reference_from_cunp_title(title)
+
     text = scraper._extract_cunp_text(response.text)
     if not text:
-        soup = BeautifulSoup(response.text, "html.parser")
         visible_text = soup.get_text(" ", strip=True)
         if sum("\u4e00" <= char <= "\u9fff" for char in visible_text) < 20:
             raise ValueError("Bible.com CUNP page did not contain enough Chinese text")
         text = visible_text
 
-    if not reference:
-        match = re.search(r"([1-3]?\s?[A-Z][A-Za-z]+)\.(\d+(?:\.\d+)?(?:-\d+)?)", passage_id)
-        if match:
-            reference = scraper._find_reference(
-                f"{match.group(1)} {match.group(2)}"
-            )
     if not reference or not text:
-        raise ValueError("Could not extract CUNP reference/text from Bible.com")
+        raise ValueError(
+            f"Could not extract CUNP reference/text from Bible.com (title={title[:160]!r})"
+        )
 
     logging.info(
         "CUNP passage fetched via Bible.com deterministic URL: %s (source=%s, text_length=%s)",
         reference,
-        source,
+        source or "cunp-title",
         len(text),
     )
     return reference, text
 
 
 def get_daily_verse(now=None):
-    """Get today's VOTD reference from YouVersion API, then CUNP text from its fixed passage URL."""
+    """Get today's VOTD from YouVersion API, then CUNP text from its fixed passage URL."""
     day = _day_of_year(now)
     votd = _request_json(f"{API_BASE}/verse_of_the_days/{day}", _headers())
     passage_id = str(votd.get("passage_id", "")).strip()
