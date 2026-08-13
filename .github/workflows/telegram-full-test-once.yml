@@ -1,0 +1,32 @@
+name: One-time Telegram Full Test
+
+on:
+  push:
+    branches:
+      - fix/youversion-api-20260813
+
+jobs:
+  full-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+      - name: Run full test and send only to test Telegram chat
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          YOUVERSION_APP_KEY: ${{ secrets.YOUVERSION_APP_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_TEST_CHAT_ID: ${{ secrets.TELEGRAM_TEST_CHAT_ID }}
+          DRY_RUN: 'false'
+          RUN_MODE: 'full_test'
+        run: python run_daily_bot.py
