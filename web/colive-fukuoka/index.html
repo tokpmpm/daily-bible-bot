@@ -1,59 +1,55 @@
 <!doctype html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#0f172a">
-  <title>Colive Fukuoka 2026 活動地圖與行事曆</title>
-  <meta name="description" content="Colive Fukuoka 2026 9/30–10/11 活動整理，包含 Google Maps、行事曆、地點與官方活動連結。">
-  <style>
-    :root{--bg:#f5f7fb;--card:#fff;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--blue:#2563eb;--blue2:#1d4ed8;--soft:#eff6ff;--green:#15803d;--greenbg:#ecfdf3;--amber:#b45309;--amberbg:#fff7ed;--rose:#be123c;--rosebg:#fff1f2;--gray:#475569;--graybg:#f1f5f9;--shadow:0 10px 28px rgba(15,23,42,.08)}
-    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;line-height:1.45}a{text-decoration:none;color:inherit}button{font:inherit}.wrap{max-width:760px;margin:auto;padding:12px 12px 92px}.hero{background:linear-gradient(135deg,#0f172a,#1d4ed8 68%,#38bdf8);color:white;padding:22px 18px;border-radius:24px;box-shadow:var(--shadow)}.kicker{font-size:12px;font-weight:800;letter-spacing:.08em;opacity:.82}.hero h1{font-size:28px;line-height:1.15;margin:8px 0}.hero p{margin:0;font-size:14px;opacity:.92}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px}.stat{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:11px}.stat b{font-size:20px;display:block}.stat span{font-size:11px;opacity:.9}.panel{display:none}.panel.active{display:block}.section{margin-top:18px}.head{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin-bottom:9px}.head h2{font-size:20px;margin:0}.hint{font-size:12px;color:var(--muted)}.card{background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);overflow:hidden}.map-shell{position:relative}.map-frame{display:block;border:0;width:100%;height:430px;background:#e2e8f0}.map-bar{padding:12px;border-top:1px solid var(--line);background:white}.map-place{font-size:15px;font-weight:800}.map-sub{font-size:12px;color:var(--muted);margin-top:3px}.map-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.btn{min-height:42px;padding:0 13px;border-radius:11px;border:1px solid #cbd5e1;background:white;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#1e40af;cursor:pointer}.btn.primary{background:var(--blue);border-color:var(--blue);color:white}.btn.small{min-height:36px;padding:0 10px;font-size:12px}.place-strip{display:flex;gap:8px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:none}.place-strip::-webkit-scrollbar{display:none}.place-chip{flex:0 0 auto;border:1px solid var(--line);background:#fff;border-radius:999px;min-height:40px;padding:0 13px;font-size:12px;font-weight:800;color:#334155}.place-chip.active{background:#0f172a;color:white;border-color:#0f172a}.notice{margin-top:10px;border:1px solid #fde68a;background:#fffbeb;color:#854d0e;border-radius:14px;padding:11px 12px;font-size:12px}.event{border:1px solid var(--line);background:white;border-radius:16px;padding:13px}.event+.event{margin-top:9px}.event-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}.event-title{font-weight:850;font-size:15px;line-height:1.35}.badge{flex:0 0 auto;border-radius:999px;padding:5px 8px;font-size:10px;font-weight:900}.badge.normal{background:var(--soft);color:#1d4ed8}.badge.free{background:var(--greenbg);color:var(--green)}.badge.wait{background:var(--amberbg);color:var(--amber)}.badge.sold{background:var(--rosebg);color:var(--rose)}.badge.tbd{background:var(--graybg);color:var(--gray)}.meta{display:grid;gap:4px;font-size:13px;color:#475569;margin-top:8px}.actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.date-block{margin-bottom:18px}.date-label{font-size:16px;font-weight:900;margin-bottom:8px}.calendar{background:white;border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}.month-title{padding:13px 14px;font-weight:900;border-bottom:1px solid var(--line)}.week,.grid{display:grid;grid-template-columns:repeat(7,1fr)}.week div{text-align:center;padding:8px 0;font-size:11px;font-weight:800;color:var(--muted);background:#f8fafc}.day{min-height:62px;border:0;border-top:1px solid var(--line);border-right:1px solid var(--line);padding:7px 6px;background:white;text-align:left;cursor:pointer}.day:nth-child(7n){border-right:0}.day.empty{background:#f8fafc;cursor:default}.day.has{background:#f7fbff}.day.selected{outline:2px solid var(--blue);outline-offset:-2px}.num{font-size:12px;font-weight:900}.count{display:inline-flex;min-width:18px;height:18px;align-items:center;justify-content:center;border-radius:999px;background:var(--blue);color:white;font-size:10px;font-weight:900;margin-top:6px;padding:0 5px}.calendar-detail{margin-top:12px}.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:50;background:rgba(255,255,255,.96);backdrop-filter:blur(12px);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(3,1fr);padding:7px 7px calc(7px + env(safe-area-inset-bottom))}.tab{border:0;background:transparent;border-radius:12px;padding:8px 4px;font-size:12px;font-weight:850;color:#64748b;min-height:49px}.tab.active{background:var(--soft);color:var(--blue2)}.tab .ico{display:block;font-size:17px;margin-bottom:1px}.share-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.share-note{font-size:12px;color:rgba(255,255,255,.82);margin-top:8px}@media(min-width:700px){.wrap{padding-top:20px}.map-frame{height:520px}}
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<title>Colive Fukuoka 2026｜活動、日曆與 Google Maps</title>
+<meta name="description" content="Colive Fukuoka 2026 9/30–10/11 活動整理，活動卡片直接顯示 Google Maps，並附 9 月、10 月行事曆與官方連結。">
+<style>
+:root{--bg:#f5f7fb;--card:#fff;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--blue:#2563eb;--blue2:#1d4ed8;--soft:#eff6ff;--green:#15803d;--greenbg:#ecfdf3;--amber:#b45309;--amberbg:#fff7ed;--rose:#be123c;--rosebg:#fff1f2;--gray:#475569;--graybg:#f1f5f9;--shadow:0 10px 28px rgba(15,23,42,.08)}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:12px}body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;line-height:1.45}a{text-decoration:none;color:inherit}button{font:inherit}.wrap{max-width:760px;margin:auto;padding:12px 12px 94px}.hero{background:linear-gradient(135deg,#0f172a,#1d4ed8 68%,#38bdf8);color:#fff;padding:22px 18px;border-radius:24px;box-shadow:var(--shadow)}.kicker{font-size:12px;font-weight:800;letter-spacing:.08em;opacity:.82}.hero h1{font-size:28px;line-height:1.15;margin:8px 0}.hero p{margin:0;font-size:14px;opacity:.92}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px}.stat{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:11px}.stat b{font-size:20px;display:block}.stat span{font-size:11px;opacity:.9}.share-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:13px}.hero-btn{min-height:42px;padding:0 13px;border-radius:11px;border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.13);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:850;cursor:pointer}.hero-btn.primary{background:#fff;color:#1e3a8a}.share-note{font-size:11px;opacity:.8;margin-top:8px}.section{margin-top:22px}.head{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin-bottom:10px}.head h2{font-size:21px;margin:0}.hint{font-size:12px;color:var(--muted);text-align:right}.date-block{margin-bottom:24px}.date-label{font-size:17px;font-weight:900;margin:0 0 9px;display:flex;align-items:center;justify-content:space-between;gap:8px}.date-label small{font-size:11px;color:var(--muted);font-weight:700}.event{border:1px solid var(--line);background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 5px 18px rgba(15,23,42,.05)}.event+.event{margin-top:11px}.event-body{padding:14px}.event-top{display:flex;justify-content:space-between;align-items:flex-start;gap:9px}.event-title{font-weight:900;font-size:16px;line-height:1.35}.badge{flex:0 0 auto;border-radius:999px;padding:5px 8px;font-size:10px;font-weight:900}.badge.normal{background:var(--soft);color:#1d4ed8}.badge.free{background:var(--greenbg);color:var(--green)}.badge.wait{background:var(--amberbg);color:var(--amber)}.badge.sold{background:var(--rosebg);color:var(--rose)}.badge.tbd{background:var(--graybg);color:var(--gray)}.meta{display:grid;gap:4px;font-size:13px;color:#475569;margin-top:8px}.actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px}.btn{min-height:40px;padding:0 12px;border-radius:11px;border:1px solid #cbd5e1;background:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:850;color:#1e40af;cursor:pointer}.btn.primary{background:var(--blue);border-color:var(--blue);color:#fff}.event-map{border-top:1px solid var(--line);background:#e2e8f0}.event-map iframe{display:block;width:100%;height:190px;border:0}.map-missing{padding:13px 14px;border-top:1px solid var(--line);background:#f8fafc;color:var(--muted);font-size:12px}.calendar-wrap{display:grid;gap:14px}.calendar{background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}.month-title{padding:12px 14px;font-size:15px;font-weight:900;border-bottom:1px solid var(--line)}.week,.grid{display:grid;grid-template-columns:repeat(7,1fr)}.week div{text-align:center;padding:8px 0;font-size:10px;font-weight:850;color:var(--muted);background:#f8fafc}.day{min-height:58px;border:0;border-top:1px solid var(--line);border-right:1px solid var(--line);padding:6px;background:#fff;text-align:left}.day:nth-child(7n){border-right:0}.day.empty{background:#f8fafc}.day.has{background:#f5f9ff;cursor:pointer}.num{font-size:11px;font-weight:900}.count{display:inline-flex;min-width:18px;height:18px;align-items:center;justify-content:center;border-radius:999px;background:var(--blue);color:#fff;font-size:9px;font-weight:900;margin-top:5px;padding:0 5px}.calendar-note{margin-top:10px;color:var(--muted);font-size:12px}.map-card{background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}.place-strip{display:flex;gap:7px;overflow-x:auto;padding:0 0 9px;scrollbar-width:none}.place-strip::-webkit-scrollbar{display:none}.place-chip{flex:0 0 auto;border:1px solid var(--line);background:#fff;border-radius:999px;min-height:39px;padding:0 12px;font-size:11px;font-weight:850;color:#334155}.place-chip.active{background:#0f172a;color:#fff;border-color:#0f172a}.main-map{display:block;border:0;width:100%;height:380px;background:#e2e8f0}.map-bar{padding:12px 13px;border-top:1px solid var(--line)}.map-place{font-size:15px;font-weight:900}.map-sub{font-size:12px;color:var(--muted);margin-top:3px}.notice{margin-top:10px;border:1px solid #fde68a;background:#fffbeb;color:#854d0e;border-radius:14px;padding:11px 12px;font-size:12px}.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:50;background:rgba(255,255,255,.96);backdrop-filter:blur(12px);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(3,1fr);padding:7px 7px calc(7px + env(safe-area-inset-bottom))}.tab{border:0;background:transparent;border-radius:12px;padding:8px 4px;font-size:11px;font-weight:850;color:#64748b;min-height:49px;text-align:center}.tab .ico{display:block;font-size:17px;margin-bottom:1px}.tab:active{background:var(--soft);color:var(--blue2)}@media(min-width:700px){.wrap{padding-top:20px}.event-map iframe{height:240px}.main-map{height:500px}}
+</style>
 </head>
 <body>
 <div class="wrap">
-  <header class="hero">
-    <div class="kicker">COLIVE FUKUOKA 2026</div>
-    <h1>活動地圖與行事曆</h1>
-    <p>9/30–10/11 · 福岡｜Google Maps、活動時間與官方連結一次整理。</p>
-    <div class="stats"><div class="stat"><b>20</b><span>活動</span></div><div class="stat"><b>9+</b><span>已知地點</span></div><div class="stat"><b>JST</b><span>日本時間</span></div></div>
-    <div class="share-row"><button class="btn primary" id="shareBtn" type="button">分享這個頁面</button><a class="btn" style="background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.25);color:white" href="#all-events">快速看活動</a></div>
-    <div class="share-note">iPhone / Android 都能直接開；分享出去也是同一個網址。</div>
-  </header>
+<header class="hero">
+<div class="kicker">COLIVE FUKUOKA 2026</div>
+<h1>活動、日曆與地圖</h1>
+<p>9/30–10/11 · 福岡｜先看活動，每個活動直接附 Google Maps；日曆與總地圖放在後面。</p>
+<div class="stats"><div class="stat"><b>20</b><span>活動</span></div><div class="stat"><b>9+</b><span>已知地點</span></div><div class="stat"><b>JST</b><span>日本時間</span></div></div>
+<div class="share-row"><a class="hero-btn primary" href="#events">快速看活動</a><button class="hero-btn" id="shareBtn" type="button">分享這個頁面</button></div>
+<div class="share-note">手機直接開，也可以把這個網址分享給朋友。</div>
+</header>
 
-  <main>
-    <section id="mapPanel" class="panel active section">
-      <div class="head"><h2>Google Maps</h2><div class="hint">點地點切換真實 Google 地圖</div></div>
-      <div id="placeStrip" class="place-strip" aria-label="活動地點"></div>
-      <div class="card map-shell">
-        <iframe id="mapFrame" class="map-frame" title="Google Maps 活動地點" loading="eager" referrerpolicy="no-referrer-when-downgrade"></iframe>
-        <div class="map-bar">
-          <div id="mapPlace" class="map-place"></div>
-          <div id="mapSub" class="map-sub"></div>
-          <div class="map-actions"><a id="mapOpen" class="btn primary" target="_blank" rel="noopener">在 Google Maps 開啟</a><a id="mapNav" class="btn" target="_blank" rel="noopener">導航到這裡</a></div>
-        </div>
-      </div>
-      <div class="notice">這個分享版不需要 API Key，因此 Google 地圖一次顯示一個選定地點；上方所有活動地點都可一鍵切換。若之後加入 Google Maps API Key，可升級成同一張地圖同時顯示全部 Pin。</div>
-    </section>
+<main>
+<section id="events" class="section">
+<div class="head"><h2>所有活動</h2><div class="hint">每個活動直接附 Google Maps</div></div>
+<div id="eventList"></div>
+</section>
 
-    <section id="calendarPanel" class="panel section">
-      <div class="head"><h2>行事曆</h2><div class="hint">點日期看當天活動</div></div>
-      <div class="calendar"><div class="month-title">2026 年 10 月</div><div class="week"><div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div></div><div id="calendarGrid" class="grid"></div></div>
-      <div id="calendarDetail" class="calendar-detail"></div>
-    </section>
+<section id="calendar" class="section">
+<div class="head"><h2>行事曆</h2><div class="hint">9 月 + 10 月都在這裡</div></div>
+<div id="calendarWrap" class="calendar-wrap"></div>
+<div class="calendar-note">點有藍色數字的日期，會直接跳到該天的活動。</div>
+</section>
 
-    <section id="listPanel" class="panel section">
-      <div id="all-events" class="head"><h2>所有活動</h2><div class="hint">依日期排序</div></div>
-      <div id="eventList"></div>
-    </section>
-  </main>
+<section id="map" class="section">
+<div class="head"><h2>活動地圖</h2><div class="hint">快速切換所有已知地點</div></div>
+<div id="placeStrip" class="place-strip"></div>
+<div class="map-card">
+<iframe id="mapFrame" class="main-map" title="Google Maps 活動地點" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+<div class="map-bar"><div id="mapPlace" class="map-place"></div><div id="mapSub" class="map-sub"></div><div class="actions"><a id="mapOpen" class="btn primary" target="_blank" rel="noopener">在 Google Maps 開啟</a><a id="mapNav" class="btn" target="_blank" rel="noopener">導航到這裡</a></div></div>
+</div>
+<div class="notice">地點尚未由官方公布的活動不會亂標位置。此版本不需要 Google Maps API Key。</div>
+</section>
+</main>
 </div>
 
-<nav class="tabbar" aria-label="主要功能">
-  <button class="tab active" type="button" data-panel="map"><span class="ico">🗺️</span>地圖</button>
-  <button class="tab" type="button" data-panel="calendar"><span class="ico">📅</span>日曆</button>
-  <button class="tab" type="button" data-panel="list"><span class="ico">📋</span>活動</button>
+<nav class="tabbar" aria-label="頁面導覽">
+<a class="tab" href="#events"><span class="ico">📋</span>活動</a>
+<a class="tab" href="#calendar"><span class="ico">📅</span>日曆</a>
+<a class="tab" href="#map"><span class="ico">🗺️</span>地圖</a>
 </nav>
 
 <script>
@@ -81,30 +77,29 @@ const events=[
 ];
 const places={
 luigans:{name:'The Luigans Spa & Resort',query:'The Luigans Spa & Resort Fukuoka'},
-shikaumi:{name:'志賀海神社',query:'Shikaumi Shrine Fukuoka'},
+shikaumi:{name:'志賀海神社',query:'志賀海神社 福岡'},
 ichitaka:{name:'Ichitaka Hakata Ekimae-dori',query:'Ichitaka Hakata Ekimae-dori Fukuoka'},
 innpark:{name:'INN THE PARK FUKUOKA',query:'INN THE PARK FUKUOKA'},
 international:{name:'Fukuoka International Center',query:'Fukuoka International Center'},
-ainoshima:{name:'相島 Ainoshima',query:'Ainoshima Island Fukuoka'},
+ainoshima:{name:'相島 Ainoshima Island',query:'Ainoshima Island Fukuoka'},
 garraway:{name:'Garraway F',query:'Garraway F Fukuoka'},
 daimyo:{name:'DAIMYO CONFERENCE',query:'DAIMYO CONFERENCE Fukuoka'},
 onefukuoka:{name:'ONE FUKUOKA BLDG.',query:'ONE FUKUOKA BLDG Fukuoka'}
 };
-const labels={normal:'一般',free:'免費',wait:'候補',sold:'售罄',tbd:'待公布'};
-const days=['日','一','二','三','四','五','六'];
-function dateLabel(s){const [y,m,d]=s.split('-').map(Number);const x=new Date(y,m-1,d);return `${m}/${d}（${days[x.getDay()]}）`}
-function mapSearch(q){return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`}
-function mapNav(q){return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(q)}`}
-function mapEmbed(q){return `https://www.google.com/maps?q=${encodeURIComponent(q)}&output=embed`}
-function card(e){const [date,time,title,venue,group,status,url]=e;return `<article class="event"><div class="event-top"><div class="event-title">${title}</div><span class="badge ${status}">${labels[status]}</span></div><div class="meta"><div>📅 ${dateLabel(date)}</div><div>🕒 ${time}</div><div>📍 ${venue}</div></div><div class="actions"><a class="btn primary small" href="${url}" target="_blank" rel="noopener">活動頁</a>${group?`<button class="btn small show-map" data-place="${group}" type="button">看 Google 地圖</button><a class="btn small" href="${mapNav(places[group].query)}" target="_blank" rel="noopener">導航</a>`:''}</div></article>`}
-function selectPlace(key){const p=places[key];if(!p)return;document.querySelectorAll('.place-chip').forEach(b=>b.classList.toggle('active',b.dataset.place===key));document.getElementById('mapFrame').src=mapEmbed(p.query);document.getElementById('mapPlace').textContent=p.name;const n=events.filter(e=>e[4]===key).length;document.getElementById('mapSub').textContent=`${n} 個活動在這個地點`;document.getElementById('mapOpen').href=mapSearch(p.query);document.getElementById('mapNav').href=mapNav(p.query)}
-function showPanel(name){document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.getElementById(name+'Panel').classList.add('active');document.querySelector(`.tab[data-panel="${name}"]`).classList.add('active')}
-const placeStrip=document.getElementById('placeStrip');placeStrip.innerHTML=Object.entries(places).map(([k,p])=>`<button class="place-chip" type="button" data-place="${k}">${p.name}</button>`).join('');placeStrip.addEventListener('click',e=>{const b=e.target.closest('[data-place]');if(b)selectPlace(b.dataset.place)});selectPlace('luigans');
-const grouped={};events.forEach(e=>(grouped[e[0]]??=[]).push(e));document.getElementById('eventList').innerHTML=Object.keys(grouped).sort().map(d=>`<section class="date-block"><div class="date-label">${dateLabel(d)}</div>${grouped[d].map(card).join('')}</section>`).join('');
-document.addEventListener('click',e=>{const b=e.target.closest('.show-map');if(!b)return;selectPlace(b.dataset.place);showPanel('map');window.scrollTo({top:0,behavior:'smooth'})});
-const counts={};events.forEach(e=>{if(e[0].startsWith('2026-10'))counts[e[0]]=(counts[e[0]]||0)+1});const grid=document.getElementById('calendarGrid');const first=new Date(2026,9,1).getDay(),total=new Date(2026,10,0).getDate();let html='';for(let i=0;i<first;i++)html+='<div class="day empty"></div>';for(let d=1;d<=total;d++){const ds=`2026-10-${String(d).padStart(2,'0')}`,c=counts[ds]||0;html+=`<button class="day ${c?'has':''}" data-date="${ds}" type="button"><div class="num">${d}</div>${c?`<span class="count">${c}</span>`:''}</button>`}grid.innerHTML=html;function showDate(ds){grid.querySelectorAll('.day').forEach(x=>x.classList.toggle('selected',x.dataset.date===ds));const list=events.filter(e=>e[0]===ds);document.getElementById('calendarDetail').innerHTML=`<div class="date-label">${dateLabel(ds)}</div>${list.length?list.map(card).join(''):'<div class="event">今天沒有活動。</div>'}`};grid.addEventListener('click',e=>{const b=e.target.closest('[data-date]');if(b)showDate(b.dataset.date)});showDate('2026-10-01');
-document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{showPanel(b.dataset.panel);window.scrollTo({top:0,behavior:'smooth'})}));
-const shareBtn=document.getElementById('shareBtn');shareBtn.addEventListener('click',async()=>{try{if(navigator.share){await navigator.share({title:document.title,text:'Colive Fukuoka 2026 活動地圖與行事曆',url:location.href})}else{await navigator.clipboard.writeText(location.href);shareBtn.textContent='網址已複製'}}catch(err){}});
+const labels={normal:'活動',free:'免費',wait:'候補',sold:'售罄',tbd:'地點待公布'};
+const dows=['日','一','二','三','四','五','六'];
+const dateLabel=s=>{const [y,m,d]=s.split('-').map(Number);const x=new Date(y,m-1,d);return `${m}/${d}（${dows[x.getDay()]}）`};
+const embed=q=>`https://www.google.com/maps?q=${encodeURIComponent(q)}&output=embed`;
+const openMap=q=>`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+const navMap=q=>`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(q)}`;
+function eventHTML(e){const p=e[4]?places[e[4]]:null;return `<article class="event"><div class="event-body"><div class="event-top"><div class="event-title">${e[2]}</div><span class="badge ${e[5]}">${labels[e[5]]}</span></div><div class="meta"><div>🕒 ${e[1]}</div><div>📍 ${e[3]}</div></div><div class="actions"><a class="btn primary" href="${e[6]}" target="_blank" rel="noopener">活動頁</a>${p?`<a class="btn" href="${openMap(p.query)}" target="_blank" rel="noopener">Google Maps</a><a class="btn" href="${navMap(p.query)}" target="_blank" rel="noopener">導航</a>`:''}</div></div>${p?`<div class="event-map"><iframe title="${e[2]} Google Maps" loading="lazy" referrerpolicy="no-referrer-when-downgrade" src="${embed(p.query)}"></iframe></div>`:`<div class="map-missing">📍 官方尚未公布活動地點，因此暫不顯示地圖。</div>`}</article>`}
+function buildEvents(){const groups={};events.forEach(e=>(groups[e[0]]??=[]).push(e));document.getElementById('eventList').innerHTML=Object.keys(groups).sort().map(d=>`<section class="date-block" id="date-${d}"><div class="date-label"><span>${dateLabel(d)}</span><small>${groups[d].length} 個活動</small></div>${groups[d].map(eventHTML).join('')}</section>`).join('')}
+function buildMonth(year,month){const first=new Date(year,month-1,1).getDay();const total=new Date(year,month,0).getDate();const counts={};events.forEach(e=>{if(e[0].startsWith(`${year}-${String(month).padStart(2,'0')}-`))counts[e[0]]=(counts[e[0]]||0)+1});let cells='';for(let i=0;i<first;i++)cells+='<div class="day empty"></div>';for(let d=1;d<=total;d++){const ds=`${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;const c=counts[ds]||0;cells+=c?`<button class="day has" type="button" data-date="${ds}"><div class="num">${d}</div><span class="count">${c}</span></button>`:`<div class="day"><div class="num">${d}</div></div>`}return `<div class="calendar"><div class="month-title">${year} 年 ${month} 月</div><div class="week"><div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div></div><div class="grid">${cells}</div></div>`}
+function buildCalendars(){const wrap=document.getElementById('calendarWrap');wrap.innerHTML=buildMonth(2026,9)+buildMonth(2026,10);wrap.querySelectorAll('[data-date]').forEach(b=>b.addEventListener('click',()=>{const el=document.getElementById(`date-${b.dataset.date}`);if(el)el.scrollIntoView({behavior:'smooth',block:'start'})}))}
+function setMainMap(key){const p=places[key];if(!p)return;document.getElementById('mapFrame').src=embed(p.query);document.getElementById('mapPlace').textContent=p.name;const n=events.filter(e=>e[4]===key).length;document.getElementById('mapSub').textContent=`${n} 個活動在這個地點`;document.getElementById('mapOpen').href=openMap(p.query);document.getElementById('mapNav').href=navMap(p.query);document.querySelectorAll('.place-chip').forEach(x=>x.classList.toggle('active',x.dataset.key===key))}
+function buildMainMap(){const strip=document.getElementById('placeStrip');strip.innerHTML=Object.entries(places).map(([k,p])=>`<button type="button" class="place-chip" data-key="${k}">${p.name}</button>`).join('');strip.querySelectorAll('.place-chip').forEach(b=>b.addEventListener('click',()=>setMainMap(b.dataset.key)));setMainMap('luigans')}
+const shareBtn=document.getElementById('shareBtn');shareBtn.addEventListener('click',async()=>{try{if(navigator.share){await navigator.share({title:document.title,text:'Colive Fukuoka 2026 活動整理',url:location.href})}else{alert('請使用瀏覽器的分享功能分享這個網址。')}}catch(e){}});
+buildEvents();buildCalendars();buildMainMap();
 </script>
 </body>
 </html>
