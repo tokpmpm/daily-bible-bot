@@ -37,7 +37,7 @@ class TestFullTestMode(unittest.TestCase):
 
     def test_full_test_success_returns_before_formal_publishers(self):
         verse = {"reference": "以弗所書 3章20-21節", "text": "神能照着運行在我們心裏的大力。"}
-        exposition = "這是由 OpenAI 產生的完整測試解經內容。"
+        exposition = "這是由 NVIDIA NIM 產生的完整測試解經內容。"
         formal = self._formal_mocks()
 
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as audio_file:

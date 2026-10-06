@@ -47,6 +47,10 @@ def positive_int_env(name, default):
     return value
 
 
+# NVIDIA NIM is used for exposition generation.
+NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
+
+# OpenAI is retained only as the optional TTS fallback provider.
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_TTS_MODEL = os.getenv("OPENAI_TTS_MODEL", "gpt-4o-mini-tts")
 OPENAI_TTS_VOICE = os.getenv("OPENAI_TTS_VOICE", "nova")
@@ -89,8 +93,8 @@ R2_PUBLIC_BASE_URL = os.getenv("R2_PUBLIC_BASE_URL", "")
 # Testing
 DRY_RUN = os.getenv("DRY_RUN", "false").lower() == "true"
 
-if not OPENAI_API_KEY:
-    print("Warning: OPENAI_API_KEY is not set.")
+if not NVIDIA_API_KEY:
+    print("Warning: NVIDIA_API_KEY is not set.")
 if not LINE_CHANNEL_ACCESS_TOKEN:
     print("Warning: LINE_CHANNEL_ACCESS_TOKEN is not set.")
 if not LINE_CHANNEL_SECRET:

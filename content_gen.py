@@ -1,17 +1,19 @@
 import requests
-import json
 import logging
-from config import OPENAI_API_KEY
+from config import NVIDIA_API_KEY
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+NVIDIA_NIM_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
+NVIDIA_NIM_MODEL = "nvidia/nemotron-3-ultra-550b-a55b"
+
 def generate_exposition(verse_data):
     """
-    Generates a 350-word exposition for the given verse using OpenAI API.
+    Generates a 350-word exposition for the given verse using NVIDIA NIM.
     """
-    if not OPENAI_API_KEY:
-        logging.error("OPENAI_API_KEY is not set.")
+    if not NVIDIA_API_KEY:
+        logging.error("NVIDIA_API_KEY is not set.")
         return None
 
     verse_text = verse_data['text']
@@ -42,13 +44,12 @@ def generate_exposition(verse_data):
     ⚠️ 重要提醒：請務必精簡內容，確保總字數不超過 350 字。請先估算字數再撰寫。
     """
 
-    url = "https://api.openai.com/v1/chat/completions"
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {OPENAI_API_KEY}"
+        "Authorization": f"Bearer {NVIDIA_API_KEY}"
     }
     data = {
-        "model": "gpt-4o",
+        "model": NVIDIA_NIM_MODEL,
         "messages": [
             {"role": "system", "content": "你是一位資深的聖經教師，擅長用溫暖的語氣講解聖經真理。"},
             {"role": "user", "content": prompt}
@@ -58,11 +59,16 @@ def generate_exposition(verse_data):
     }
 
     try:
-        response = requests.post(url, headers=headers, json=data, timeout=60)
+        response = requests.post(
+            NVIDIA_NIM_URL,
+            headers=headers,
+            json=data,
+            timeout=120,
+        )
         response.raise_for_status()
         result = response.json()
         content = result['choices'][0]['message']['content']
-        logging.info("Successfully generated exposition.")
+        logging.info("Successfully generated exposition with NVIDIA NIM.")
         return content
     except Exception as e:
         logging.error(f"Error generating content: {e}")
