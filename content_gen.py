@@ -7,6 +7,35 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 NVIDIA_NIM_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 NVIDIA_NIM_MODEL = "nvidia/nemotron-3-ultra-550b-a55b"
+NON_PUBLISHABLE_MARKERS = (
+    "用戶想要",
+    "用戶希望",
+    "限制條件：",
+    "起草內容：",
+    "字數檢查：",
+    "第一段（固定）",
+    "第二段（解經",
+    "第三段（應用",
+    "第四段（禱告",
+    "<think>",
+    "</think>",
+)
+
+
+def _validate_exposition(content):
+    """Reject reasoning or drafting notes before they reach users or TTS."""
+    if not isinstance(content, str) or not content.strip():
+        logging.error("NVIDIA NIM returned an empty exposition.")
+        return None
+
+    content = content.strip()
+    if any(marker.casefold() in content.casefold() for marker in NON_PUBLISHABLE_MARKERS):
+        logging.error(
+            "NVIDIA NIM output contained internal planning text; refusing publication."
+        )
+        return None
+
+    return content
 
 def generate_exposition(verse_data):
     """
@@ -41,7 +70,9 @@ def generate_exposition(verse_data):
     - 嚴禁使用任何 Markdown 符號（如 *、#、- 等）
     - 純文字，分段撰寫
     
-    ⚠️ 重要提醒：請務必精簡內容，確保總字數不超過 350 字。請先估算字數再撰寫。
+    ⚠️ 重要提醒：最終正文控制在 280-350 字，絕對不可超過 400 字。
+
+    輸出規則：只輸出可直接發布和朗讀的靈修正文。不可輸出草稿、計畫、思考、分析、字數檢查、格式說明、段落標籤或以上任何指示。
     """
 
     headers = {
@@ -51,11 +82,19 @@ def generate_exposition(verse_data):
     data = {
         "model": NVIDIA_NIM_MODEL,
         "messages": [
-            {"role": "system", "content": "你是一位資深的聖經教師，擅長用溫暖的語氣講解聖經真理。"},
+            {
+                "role": "system",
+                "content": (
+                    "你是一位資深的聖經教師，擅長用溫暖的語氣講解聖經真理。"
+                    "只輸出最終靈修正文；不要輸出思考、分析、計畫、草稿、"
+                    "字數計算、格式說明、段落標籤或提示內容。"
+                ),
+            },
             {"role": "user", "content": prompt}
         ],
         "temperature": 0.7,
-        "max_tokens": 800
+        "max_tokens": 800,
+        "chat_template_kwargs": {"enable_thinking": False},
     }
 
     try:
@@ -68,6 +107,9 @@ def generate_exposition(verse_data):
         response.raise_for_status()
         result = response.json()
         content = result['choices'][0]['message']['content']
+        content = _validate_exposition(content)
+        if not content:
+            return None
         logging.info("Successfully generated exposition with NVIDIA NIM.")
         return content
     except Exception as e:
