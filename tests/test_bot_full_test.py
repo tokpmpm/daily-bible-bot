@@ -109,6 +109,28 @@ class TestFullTestMode(unittest.TestCase):
         finally:
             os.unlink(audio_path)
 
+    def test_invalid_exposition_stops_before_audio_or_telegram(self):
+        formal = self._formal_mocks()
+
+        with patch.object(bot, "RUN_MODE", "full_test"), \
+             patch.object(bot, "DRY_RUN", False), \
+             patch.object(
+                 bot,
+                 "get_daily_verse",
+                 return_value={"reference": "以賽亞書 26章4節", "text": "經文"},
+             ), \
+             patch.object(bot, "generate_exposition", return_value=None), \
+             patch.object(bot, "generate_audio") as generate_audio, \
+             patch.object(bot, "send_full_test_to_telegram") as send_test, \
+             patch.multiple(bot, **formal):
+            result = bot.run_daily_task()
+
+        self.assertFalse(result)
+        generate_audio.assert_not_called()
+        send_test.assert_not_called()
+        for formal_mock in formal.values():
+            formal_mock.assert_not_called()
+
     def test_test_telegram_sender_uses_only_local_audio_and_test_chat(self):
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as audio_file:
             audio_file.write(b"mp3 data")
