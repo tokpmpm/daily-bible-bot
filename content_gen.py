@@ -1,5 +1,6 @@
 import requests
 import logging
+import time
 from config import NVIDIA_API_KEY
 
 # Configure logging
@@ -7,6 +8,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 NVIDIA_NIM_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 NVIDIA_NIM_MODEL = "nvidia/nemotron-3-ultra-550b-a55b"
+NVIDIA_NIM_MAX_ATTEMPTS = 3
+NVIDIA_NIM_RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 NON_PUBLISHABLE_MARKERS = (
     "用戶想要",
     "用戶希望",
@@ -97,26 +100,54 @@ def generate_exposition(verse_data):
         "chat_template_kwargs": {"enable_thinking": False},
     }
 
-    try:
-        response = requests.post(
-            NVIDIA_NIM_URL,
-            headers=headers,
-            json=data,
-            timeout=120,
-        )
-        response.raise_for_status()
-        result = response.json()
-        content = result['choices'][0]['message']['content']
-        content = _validate_exposition(content)
-        if not content:
+    for attempt in range(1, NVIDIA_NIM_MAX_ATTEMPTS + 1):
+        response = None
+        try:
+            response = requests.post(
+                NVIDIA_NIM_URL,
+                headers=headers,
+                json=data,
+                timeout=120,
+            )
+            response.raise_for_status()
+            result = response.json()
+            content = result['choices'][0]['message']['content']
+            content = _validate_exposition(content)
+            if not content:
+                return None
+            logging.info("Successfully generated exposition with NVIDIA NIM.")
+            return content
+        except requests.RequestException as error:
+            response = getattr(error, "response", None) or response
+            status_code = getattr(response, "status_code", None)
+            retryable = (
+                status_code in NVIDIA_NIM_RETRYABLE_STATUS_CODES
+                or isinstance(error, (requests.Timeout, requests.ConnectionError))
+            )
+            if retryable and attempt < NVIDIA_NIM_MAX_ATTEMPTS:
+                retry_delay = min(2 ** attempt, 8)
+                logging.warning(
+                    "NVIDIA NIM request failed transiently (status=%s; attempt %d/%d); "
+                    "retrying in %d seconds.",
+                    status_code,
+                    attempt,
+                    NVIDIA_NIM_MAX_ATTEMPTS,
+                    retry_delay,
+                )
+                time.sleep(retry_delay)
+                continue
+
+            logging.error("Error generating content: %s", error)
+            if response is not None:
+                logging.error("Response: %s", response.text)
             return None
-        logging.info("Successfully generated exposition with NVIDIA NIM.")
-        return content
-    except Exception as e:
-        logging.error(f"Error generating content: {e}")
-        if 'response' in locals():
-             logging.error(f"Response: {response.text}")
-        return None
+        except Exception as error:
+            logging.error("Error generating content: %s", error)
+            if response is not None:
+                logging.error("Response: %s", response.text)
+            return None
+
+    return None
 
 if __name__ == "__main__":
     # Manual test
