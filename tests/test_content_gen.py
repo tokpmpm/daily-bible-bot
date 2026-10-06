@@ -63,6 +63,25 @@ class TestGenerateExposition(unittest.TestCase):
 
         self.assertIsNone(result)
 
+    def test_retries_transient_nvidia_unavailable(self):
+        unavailable = content_gen.requests.Response()
+        unavailable.status_code = 503
+        unavailable._content = b'{"error":"temporarily unavailable"}'
+        success = FakeNvidiaResponse()
+
+        with patch.object(content_gen, "NVIDIA_API_KEY", "test-nvidia-key"), patch.object(
+            content_gen.requests,
+            "post",
+            side_effect=[unavailable, success],
+        ) as post, patch.object(content_gen.time, "sleep") as sleep:
+            result = content_gen.generate_exposition(
+                {"text": "經文內容", "reference": "以賽亞書 26章4節"}
+            )
+
+        self.assertEqual(result, "NVIDIA NIM 產生的繁體中文靈修短文。")
+        self.assertEqual(post.call_count, 2)
+        sleep.assert_called_once_with(2)
+
     def test_missing_nvidia_api_key_does_not_call_api(self):
         with patch.object(content_gen, "NVIDIA_API_KEY", None), patch.object(
             content_gen.requests, "post"
