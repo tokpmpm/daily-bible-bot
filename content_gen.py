@@ -148,6 +148,19 @@ def _contains_near_verbatim_quote(source_text, content):
     )
 
 
+def _normalize_prayer_pronouns(content):
+    """Use the established divine pronoun only in the prayer paragraph."""
+    if not isinstance(content, str):
+        return content
+    prayer_start = content.find(PRAYER_OPENING)
+    if prayer_start < 0:
+        return content
+    prayer = content[prayer_start:]
+    for pronoun in ("祂", "妳", "你"):
+        prayer = prayer.replace(pronoun, "祢")
+    return content[:prayer_start] + prayer
+
+
 def _has_explicit_hypothetical_label(content, match_start):
     context = content[max(0, match_start - 60):match_start]
     context = re.split(r"[。！？\n]", context)[-1]
@@ -356,7 +369,9 @@ def generate_exposition(verse_data):
                 )
                 response.raise_for_status()
                 result = response.json()
-                raw_content = result['choices'][0]['message']['content']
+                raw_content = _normalize_prayer_pronouns(
+                    result['choices'][0]['message']['content']
+                )
                 content = _validate_exposition(
                     raw_content,
                     verse_text=verse_text,
