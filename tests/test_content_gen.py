@@ -211,6 +211,31 @@ class TestGenerateExposition(unittest.TestCase):
             )
         )
 
+    def test_normalizes_prayer_pronouns_before_publication(self):
+        draft = (
+            "祂是我們可以倚靠的磐石。\n\n"
+            "我們一起來禱告：天父，求祂扶持我們，也求妳賜下平安；"
+            "謝謝你聽我們禱告。阿們。"
+        )
+        normalized = content_gen._normalize_prayer_pronouns(draft)
+        self.assertEqual(
+            normalized,
+            "祂是我們可以倚靠的磐石。\n\n"
+            "我們一起來禱告：天父，求祢扶持我們，也求祢賜下平安；"
+            "謝謝祢聽我們禱告。阿們。",
+        )
+        self.assertEqual(content_gen._exposition_issues(normalized), [])
+
+        with patch.object(content_gen, "NVIDIA_API_KEY", "test-nvidia-key"), patch.object(
+            content_gen.requests, "post", return_value=FakeNvidiaResponse(draft)
+        ) as post:
+            result = content_gen.generate_exposition(
+                {"text": "你們當倚靠耶和華。", "reference": "以賽亞書 26:4"}
+            )
+
+        self.assertEqual(result, normalized)
+        post.assert_called_once()
+
     def test_aborts_after_two_overlong_outputs(self):
         overlong_content = "禱" * (content_gen.MAX_EXPOSITION_CHARACTERS + 1)
 
