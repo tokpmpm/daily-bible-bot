@@ -1,6 +1,7 @@
 import requests
 import logging
 import time
+import re
 import unicodedata
 from config import NVIDIA_API_KEY
 
@@ -12,9 +13,48 @@ NVIDIA_NIM_MODEL = "nvidia/nemotron-3-ultra-550b-a55b"
 NVIDIA_NIM_MAX_ATTEMPTS = 3
 NVIDIA_NIM_MAX_CONTENT_ATTEMPTS = 2
 NVIDIA_NIM_RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
-MAX_EXPOSITION_CHARACTERS = 450
+MAX_EXPOSITION_CHARACTERS = 650
 MIN_PRAYER_CHARACTERS = 8
+MIN_NEAR_VERBATIM_CHARACTERS = 15
+NEAR_VERBATIM_SOURCE_PERCENT = 70
 PRAYER_OPENING = "我們一起來禱告"
+COMPARISON_VARIANTS = str.maketrans({"着": "著", "裏": "裡", "台": "臺", "衆": "眾", "爲": "為"})
+PERSONAL_TESTIMONY_PATTERN = re.compile(
+    r"(?:"
+    r"(?:前幾天|幾天前|有一天|有一次|那天|那晚|深夜)[^。！？\n]{0,100}?"
+    r"(?:我|我們)[^。！？\n]{0,100}?(?:禱告|祈禱)"
+    r"|(?:我曾(?:經)?|我親身|親身經歷|我的見證|我記得有(?:一次|一天))"
+    r"[^。！？\n]{0,100}?(?:禱告|祈禱|得醫治|痊癒|康復|見證|經歷)"
+    r")"
+)
+PRAYER_HEALING_OUTCOME_PATTERN = re.compile(
+    r"(?:禱告|祈禱).{0,50}?(?:之後|以後|過後|隔天|第二天|後來|不久|結果).{0,30}?"
+    r"(?:燒退|退燒|痊癒|康復|病好了|得到醫治|得著醫治)",
+    re.DOTALL,
+)
+GUARANTEED_OUTCOME_PATTERN = re.compile(
+    r"(?:"
+    r"(?:只要|只需|只須).{0,25}?(?:相信|禱告|祈求|信心).{0,30}?"
+    r"(?:就(?:會|必)|一定|必定|必然|保證).{0,25}?"
+    r"(?:實現|成真|如願|願望|得著|得醫治|醫治|治好|痊癒|康復|病好|燒退|退燒)"
+    r"|(?:心願|願望|所求).{0,15}?(?:一定|必定|必然|都會|必會).{0,20}?"
+    r"(?:實現|成真|成就|如願)"
+    r"|(?:神|上帝|主|祂).{0,15}?(?:必定|必然|一定|保證|必會).{0,15}?"
+    r"(?:答應|成就|實現|醫治|治好|痊癒|康復|病好|燒退|退燒)"
+    r")",
+    re.DOTALL,
+)
+NEGATED_OUTCOME_MARKERS = (
+    "不是",
+    "並非",
+    "不代表",
+    "不表示",
+    "不一定",
+    "不會",
+    "不保證",
+    "不要",
+    "未必",
+)
 NON_PUBLISHABLE_MARKERS = (
     "用戶想要",
     "用戶希望",
@@ -25,7 +65,25 @@ NON_PUBLISHABLE_MARKERS = (
     "第二段（解經",
     "第三段（應用",
     "第四段（禱告",
-    "整篇以約 300-400 個中文字",
+    "以約 280-350 個中文字為目標",
+    "全文以約 280-350 個中文字為目標",
+    "每段約 2-4 句",
+    "三段自然文字",
+    "開頭直接說明經文意思",
+    "不要先用「耶穌說：",
+    "不添加經文沒有提供的歷史背景",
+    "不擴張成經文沒有支持的神學斷言",
+    "請寫一篇可直接發布和朗讀",
+    "請根據經文寫一篇",
+    "經文（只供理解",
+    "出處（只供理解",
+    "若是虛構情境，請清楚標明是假設",
+    "不可寫成作者親身經歷或見證",
+    "若經文談信心與禱告，不要把信心說成實現願望的保證",
+    "生活例子可以明確標示為假設",
+    "不必套固定套路",
+    "避免像清單般羅列多種處境",
+    "讓解經、生活連結和禱告自然銜接",
     "請根據以下經文",
     "經文內容（供理解",
     "經文出處（供理解",
@@ -51,12 +109,54 @@ NON_PUBLISHABLE_MARKERS = (
 
 
 def _normalize_for_comparison(text):
-    """Ignore spacing and punctuation when checking for repeated source text."""
+    """Ignore spacing, punctuation, and common Traditional Chinese variants."""
+    text = text.translate(COMPARISON_VARIANTS)
     return "".join(
         char.casefold()
         for char in text
         if not char.isspace() and unicodedata.category(char)[0] not in {"P", "Z"}
     )
+
+
+def _longest_common_contiguous_length(first, second):
+    """Return the longest shared uninterrupted character sequence length."""
+    if len(first) < len(second):
+        first, second = second, first
+
+    previous = [0] * (len(second) + 1)
+    longest = 0
+    for char in first:
+        current = [0] * (len(second) + 1)
+        for index, other in enumerate(second, start=1):
+            if char == other:
+                current[index] = previous[index - 1] + 1
+                longest = max(longest, current[index])
+        previous = current
+    return longest
+
+
+def _contains_near_verbatim_quote(source_text, content):
+    source = _normalize_for_comparison(source_text)
+    if len(source) < MIN_NEAR_VERBATIM_CHARACTERS:
+        return False
+
+    content = _normalize_for_comparison(content)
+    shared_length = _longest_common_contiguous_length(source, content)
+    return (
+        shared_length >= MIN_NEAR_VERBATIM_CHARACTERS
+        and shared_length * 100 >= len(source) * NEAR_VERBATIM_SOURCE_PERCENT
+    )
+
+
+def _has_explicit_hypothetical_label(content, match_start):
+    context = content[max(0, match_start - 60):match_start]
+    context = re.split(r"[。！？\n]", context)[-1]
+    return any(label in context for label in ("假設", "假如", "假想", "設想"))
+
+
+def _is_negated_outcome(content, match):
+    context = content[max(0, match.start() - 20):match.end()]
+    return any(marker in context for marker in NEGATED_OUTCOME_MARKERS)
 
 
 def _exposition_issues(content, verse_text="", verse_ref=""):
@@ -78,8 +178,24 @@ def _exposition_issues(content, verse_text="", verse_ref=""):
         normalized_source = _normalize_for_comparison(source_text)
         if normalized_source and normalized_source in normalized_content:
             issues.append(f"repeated_{source_label}")
+        elif source_label == "verse" and _contains_near_verbatim_quote(source_text, content):
+            issues.append("repeated_verse")
+
+    if any(
+        not _has_explicit_hypothetical_label(content, match.start())
+        for match in PERSONAL_TESTIMONY_PATTERN.finditer(content)
+    ):
+        issues.append("personal_testimony")
+    if any(
+        not _is_negated_outcome(content, match)
+        for pattern in (PRAYER_HEALING_OUTCOME_PATTERN, GUARANTEED_OUTCOME_PATTERN)
+        for match in pattern.finditer(content)
+    ):
+        issues.append("guaranteed_outcome")
 
     prayer_start = content.find(PRAYER_OPENING)
+    if "妳" in content:
+        issues.append("wrong_divine_pronoun")
     if prayer_start < 0:
         issues.append("missing_prayer")
     else:
@@ -87,7 +203,7 @@ def _exposition_issues(content, verse_text="", verse_ref=""):
         prayer_characters = sum(char.isalnum() for char in prayer_text)
         if prayer_characters < MIN_PRAYER_CHARACTERS:
             issues.append("missing_prayer")
-        if "你" in prayer_text or "妳" in content:
+        if "你" in prayer_text or "祂" in prayer_text:
             issues.append("wrong_divine_pronoun")
 
     return issues
@@ -113,9 +229,8 @@ def _build_repair_prompt(issues, verse_text, verse_ref, draft):
     repair_instructions = []
     if "overlong" in issues:
         repair_instructions.append(
-            f"前一稿超過 {MAX_EXPOSITION_CHARACTERS} 個非空白字元，請直接壓縮改寫，"
-            f"完成稿不得超過 {MAX_EXPOSITION_CHARACTERS} 個非空白字元。"
-            "不要只刪掉結尾；保留經文要旨、一個具體生活處境、一個可行回應，以及完整禱告。"
+            f"初稿稍長，請順著原意自然收短至 {MAX_EXPOSITION_CHARACTERS} 個非空白字元內；"
+            "保留經文核心、自然的生活連結和完整禱告，不要改成條列或生硬刪句。"
         )
     if "repeated_verse" in issues:
         repair_instructions.append(
@@ -135,19 +250,27 @@ def _build_repair_prompt(issues, verse_text, verse_ref, draft):
         )
     if "wrong_divine_pronoun" in issues:
         repair_instructions.append(
-            "前一稿用錯稱呼神的代詞：敘述神時用「祂」，禱告中稱呼神時用「祢」，"
-            "不可用「妳」或「你」稱呼神。"
+            "前一稿用錯稱呼神的代詞：敘述神時用「祂」；禱告中一律用「祢」，不可在禱告中用「祂」、"
+            "「妳」或「你」。"
+        )
+    if "personal_testimony" in issues:
+        repair_instructions.append(
+            "移除像作者親身經歷或見證的敘述；若需要生活例子，請明確標示為假設情境。"
+        )
+    if "guaranteed_outcome" in issues:
+        repair_instructions.append(
+            "不要把禱告寫成保證願望實現或疾病痊癒，也不要暗示某次禱告造成特定醫療結果。"
         )
 
     repair_instructions.append(
-        f"所有修訂稿以約 300-400 個中文字為目標，適合約一分鐘朗讀，且不得超過 "
-        f"{MAX_EXPOSITION_CHARACTERS} 個非空白字元。"
-        "以繁體中文自然分段，忠於經文，不添加沒有根據的背景或原文字義；包含經文要旨、"
-        "只選一個具體生活場景，不要羅列或堆疊不同處境；包含一個可行回應及完整禱告。"
-        "敘述神用「祂」，禱告中稱呼神用「祢」，不可用「妳」或「你」稱呼神；"
-        "禱告須以「我們一起來禱告」開頭。"
-        "不要重複經文全文或出處，不要加標題、段落標籤、Markdown、思考過程或字數檢查；"
-        "只輸出修訂後的靈修正文。"
+        f"全文以約 280-350 個中文字為目標，且不得超過 {MAX_EXPOSITION_CHARACTERS} 個非空白字元；"
+        "寫成三段自然文字：清楚節制地解釋經文、連到生活應用，再以簡短禱告結尾，每段約 2-4 句。"
+        "只按經文本身說明，不添加經文未提供的背景或超出經文的神學斷言。"
+        "例子可以明確標示為假設，不可冒充作者親身經歷；避免像清單般羅列多種處境。"
+        "禱告以「我們一起來禱告」開頭，"
+        "要真誠回應正文，不要只重述正文；敘述神用「祂」，禱告稱呼神用「祢」，不可用「妳」或「你」。"
+        "不保證願望實現或醫病結果，也不寫成禱告造成特定醫療結果的見證。忠於經文，不重複經文或出處。"
+        "只輸出自然分段的正文。"
     )
     draft_text = draft if isinstance(draft, str) else ""
 
@@ -178,20 +301,20 @@ def generate_exposition(verse_data):
     verse_ref = verse_data['reference']
 
     prompt = f"""
-    請根據以下經文，寫一篇溫暖、真誠、可直接發布和朗讀的繁體中文靈修短文，使用自然的台灣用語。整篇以約 300-400 個中文字為目標，適合約一分鐘朗讀；不要為了湊字數重述經文。
+    請寫一篇可直接發布和朗讀的繁體中文靈修分享，全文以約 280-350 個中文字為目標，篇幅自然即可。語氣平實溫暖，像清楚的聖經教導自然帶出生活應用。
 
-    經文內容（供理解，不要重複引用）：{verse_text}
-    經文出處（供理解，不要在正文重複）：{verse_ref}
+    經文（只供理解，正文不需重複）：{verse_text}
+    出處（只供理解，正文不需列出）：{verse_ref}
 
-    從經文本身出發，用清楚的話點出它最重要的信息，並說明這信息如何觸及人的真實生活。忠於經文，不要為了讓文字顯得深奧而添加經文沒有支持的背景或結論；不要猜測希伯來文、希臘文原意，也不要把個人推測說成確定的神學結論。
+    正文寫成三段自然文字，每段約 2-4 句：第一段清楚、節制地解釋經文核心；第二段連到貼近日常的生活應用；第三段以簡短禱告收尾。全文不逐段分配字數。開頭直接說明經文意思，不要先用「耶穌說：『……』」重引大半節經文。只按提供的經文本身解釋，不添加經文沒有提供的歷史背景、故事細節或原文字義，也不擴張成經文沒有支持的神學斷言。
 
-    只選一個最貼近經文的具體日常場景，寫出一個可辨認的細節；全篇聚焦這一個場景，不要列舉多種人生處境、家庭或工作議題，也不要堆疊通用例子。以理解和尊重的態度陪伴讀者，不責備、不羞辱，也不替讀者編造多重背景。提出一個小而可行的回應，讓讀者知道今天可以怎麼做；不要承諾問題會立刻解決。
+    生活應用可用貼切例子；若是虛構情境，請清楚標明是假設，不可寫成作者親身經歷或見證。避免像清單般羅列多種處境。使用自然日常的台灣用語，避免生硬神學術語。
 
-    最後寫一段真誠、貼近經文和生活的禱告，禱告必須以「我們一起來禱告」開頭。
+    若經文談信心與禱告，不要把信心說成實現願望的保證，也不要保證疾病必定痊癒。可以談信靠與盼望，但不要編造作者經歷或暗示禱告造成某個醫療結果。
 
-    稱呼神時請嚴格使用正確代詞：敘述神用「祂」，在禱告中直接稱呼神用「祢」；不可用「妳」或「你」稱呼神。
+    最後以「我們一起來禱告」開頭寫一段完整禱告。禱告要真誠回應正文，可以向神感謝、祈求或交託，不要只是重述正文。敘述神用「祂」，禱告中稱呼神用「祢」；不可用「妳」或「你」稱呼神。
 
-    自然分段，讓信息、生活連結和禱告彼此銜接，不必套用固定段落數或各段配額。避免空泛口號、陳腔濫調及過度抽象的術語。只輸出靈修正文：嚴禁逐字或換標點重複完整經文，也不要重複出處；不要加標題、段落標籤、Markdown、前言、寫作說明、草稿、計畫、思考過程或字數檢查。
+    三段內容要自然銜接，不用小標。只輸出正文，不重複經文或出處，也不附寫作說明。
     """
 
     headers = {
