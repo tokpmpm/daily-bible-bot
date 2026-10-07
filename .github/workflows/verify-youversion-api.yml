@@ -1,0 +1,123 @@
+name: Verify YouVersion API
+
+on:
+  push:
+    branches:
+      - fix/youversion-api-20260813
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  secret-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify App Key is available
+        env:
+          YOUVERSION_APP_KEY: ${{ secrets.YOUVERSION_APP_KEY }}
+        run: |
+          if [ -z "$YOUVERSION_APP_KEY" ]; then
+            echo "YOUVERSION_APP_KEY is missing or empty"
+            exit 1
+          fi
+          echo "YOUVERSION_APP_KEY is present (length=${#YOUVERSION_APP_KEY})"
+
+  votd-reference:
+    runs-on: ubuntu-latest
+    needs: secret-check
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install requests
+      - name: Verify today's VOTD reference
+        env:
+          YOUVERSION_APP_KEY: ${{ secrets.YOUVERSION_APP_KEY }}
+        run: |
+          python - <<'PY'
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+          import os
+          import requests
+
+          now = datetime.now(ZoneInfo('Asia/Taipei'))
+          day = now.timetuple().tm_yday
+          url = f"https://api.youversion.com/v1/verse_of_the_days/{day}"
+          response = requests.get(url, headers={"X-YVP-App-Key": os.environ["YOUVERSION_APP_KEY"]}, timeout=20)
+          print(f"VOTD_HTTP_STATUS={response.status_code}")
+          response.raise_for_status()
+          data = response.json()
+          print(f"VOTD_DAY={data.get('day')}")
+          print(f"VOTD_PASSAGE={data.get('passage_id')}")
+          assert data.get('day') == day
+          assert data.get('passage_id')
+          print('VOTD_API_LIVE_PROOF=true')
+          PY
+
+  cunp-passage:
+    runs-on: ubuntu-latest
+    needs: votd-reference
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4
+      - name: Verify CUNP passage from deterministic Bible.com URL
+        env:
+          YOUVERSION_APP_KEY: ${{ secrets.YOUVERSION_APP_KEY }}
+        run: |
+          python - <<'PY'
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+          import os
+          import re
+          import requests
+          from bs4 import BeautifulSoup
+
+          headers = {
+              "X-YVP-App-Key": os.environ["YOUVERSION_APP_KEY"],
+              "Accept": "application/json",
+          }
+          now = datetime.now(ZoneInfo('Asia/Taipei'))
+          day = now.timetuple().tm_yday
+          votd = requests.get(
+              f"https://api.youversion.com/v1/verse_of_the_days/{day}",
+              headers=headers,
+              timeout=20,
+          )
+          votd.raise_for_status()
+          passage_id = votd.json()["passage_id"]
+          print(f"VOTD_PASSAGE={passage_id}")
+
+          cunp_url = f"https://www.bible.com/zh-TW/bible/46/{passage_id}.CUNP-%E7%A5%9E"
+          page = requests.get(
+              cunp_url,
+              headers={
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/150 Safari/537.36",
+                  "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.8",
+                  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                  "Cache-Control": "no-cache",
+              },
+              timeout=20,
+          )
+          print(f"CUNP_PAGE_HTTP_STATUS={page.status_code}")
+          page.raise_for_status()
+          soup = BeautifulSoup(page.text, "html.parser")
+          title = soup.title.get_text(" ", strip=True) if soup.title else ""
+          print(f"CUNP_PAGE_TITLE={title[:160]}")
+          visible_text = soup.get_text(" ", strip=True)
+          chinese_chars = len(re.findall(r"[\u4e00-\u9fff]", visible_text))
+          print(f"CUNP_CHINESE_CHAR_COUNT={chinese_chars}")
+          assert chinese_chars >= 20, "Bible.com CUNP page did not contain enough Chinese text"
+          assert "CUNP" in visible_text or "新標點和合本" in visible_text
+          print('CUNP_BIBLE_COM_LIVE_PROOF=true')
+          PY
