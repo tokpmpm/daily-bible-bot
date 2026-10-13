@@ -4,6 +4,8 @@ import os
 import time
 
 import edge_tts
+from edge_tts import communicate as edge_tts_communicate
+from edge_tts import constants as edge_tts_constants
 import requests
 
 from config import (
@@ -25,6 +27,44 @@ from tts_normalizer import prepare_tts_text
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 OPENAI_TTS_URL = "https://api.openai.com/v1/audio/speech"
+EDGE_TTS_CURRENT_WSS_HOST = "speech.platform.bing.com"
+EDGE_TTS_MIGRATED_WSS_URL = (
+    "wss://api.msedgeservices.com/tts/cognitiveservices/websocket/v1"
+)
+
+
+def _configure_edge_tts_endpoint():
+    """Use Microsoft's current synthesis endpoint with older edge-tts releases.
+
+    Microsoft began rejecting synthesis requests to the legacy
+    ``speech.platform.bing.com`` WebSocket in October 2026.  edge-tts 7.2.8
+    still targets that host, while Microsoft's current Edge client uses
+    ``api.msedgeservices.com`` and accepts the same client token as an
+    ``Ocp-Apim-Subscription-Key`` query parameter.
+
+    ``communicate.py`` imports ``WSS_URL`` by value, so update both the
+    constants module and the already-loaded communicate module.
+    """
+    current_url = getattr(edge_tts_communicate, "WSS_URL", "")
+    if EDGE_TTS_CURRENT_WSS_HOST not in current_url:
+        return False
+
+    client_token = getattr(edge_tts_constants, "TRUSTED_CLIENT_TOKEN", "")
+    if not client_token:
+        logging.warning("Edge TTS client token is unavailable; keeping its default endpoint.")
+        return False
+
+    migrated_url = (
+        f"{EDGE_TTS_MIGRATED_WSS_URL}"
+        f"?Ocp-Apim-Subscription-Key={client_token}"
+    )
+    edge_tts_constants.WSS_URL = migrated_url
+    edge_tts_communicate.WSS_URL = migrated_url
+    logging.info("Edge TTS compatibility endpoint enabled: api.msedgeservices.com")
+    return True
+
+
+_configure_edge_tts_endpoint()
 
 
 def _cleanup_temp_file(temp_path):

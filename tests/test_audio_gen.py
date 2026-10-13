@@ -4,6 +4,8 @@ import unittest
 from unittest.mock import patch
 
 import audio_gen
+from edge_tts import communicate as edge_tts_communicate
+from edge_tts import constants as edge_tts_constants
 
 
 class FakeEdgeCommunicate:
@@ -50,6 +52,23 @@ class TestAudioGeneration(unittest.TestCase):
             self.async_sleeps.append(seconds)
 
         self.fake_async_sleep = fake_async_sleep
+
+    def test_legacy_edge_endpoint_is_migrated_to_current_host(self):
+        legacy_url = (
+            "wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/"
+            "edge/v1?TrustedClientToken=old-token"
+        )
+        with patch.object(edge_tts_constants, "WSS_URL", legacy_url), \
+             patch.object(edge_tts_communicate, "WSS_URL", legacy_url), \
+             patch.object(edge_tts_constants, "TRUSTED_CLIENT_TOKEN", "test-token"):
+            changed = audio_gen._configure_edge_tts_endpoint()
+            expected_url = (
+                "wss://api.msedgeservices.com/tts/cognitiveservices/websocket/v1"
+                "?Ocp-Apim-Subscription-Key=test-token"
+            )
+            self.assertTrue(changed)
+            self.assertEqual(edge_tts_constants.WSS_URL, expected_url)
+            self.assertEqual(edge_tts_communicate.WSS_URL, expected_url)
 
     def _edge_constructor_from_sequence(self, sequence, calls):
         def constructor(**kwargs):
